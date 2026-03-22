@@ -1,5 +1,5 @@
 {
-  "name": "web",
+  "name": "@tenora/web",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -8,17 +8,20 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
-    "check-types": "next typegen && tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@repo/ui": "workspace:*",
     "next": "16.2.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "@clerk/nextjs": "^6.0.0",
+    "@tenora/trpc": "workspace:*",
+    "@tenora/validators": "workspace:*"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@tenora/eslint-config": "workspace:*",
+    "@tenora/typescript-config": "workspace:*",
     "@types/node": "^22.15.3",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
