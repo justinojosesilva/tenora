@@ -1,0 +1,388 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+
+enum TenantStatus {
+  active
+  suspended
+  cancelled
+}
+
+enum TenantPlan {
+  starter
+  pro
+  scale
+}
+
+enum UserRole {
+  admin
+  financeiro
+  operacional
+  visualizador
+}
+
+enum PropertyType {
+  residential
+  commercial
+  mixed
+}
+
+enum PropertyStatus {
+  available
+  rented
+  maintenance
+}
+
+enum LeaseStatus {
+  active
+  ended
+  renewing
+  overdue
+}
+
+enum TransactionType {
+  credit
+  debit
+}
+
+enum TransactionOrigin {
+  bank_sync
+  manual
+  import
+}
+
+enum TransactionStatus {
+  pending
+  categorized
+  reviewed
+}
+
+enum BillingStatus {
+  pending
+  paid
+  overdue
+  cancelled
+}
+
+enum BillingType {
+  pix
+  boleto
+  transfer
+}
+
+enum MaintenanceStatus {
+  requested
+  approved
+  in_progress
+  done
+}
+
+// ── Tenant (imobiliária) ───────────────────────────────────────────────────
+
+model Tenant {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String
+  cnpj      String?      @unique
+  slug      String       @unique
+  plan      TenantPlan   @default(starter)
+  status    TenantStatus @default(active)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  // Stripe
+  stripeCustomerId     String? @map("stripe_customer_id")
+  stripeSubscriptionId String? @map("stripe_subscription_id")
+
+  // Relações
+  users            User[]
+  properties       Property[]
+  owners           Owner[]
+  bankAccounts     BankAccount[]
+  categories       Category[]
+  transactions     Transaction[]
+  leases           Lease[]
+  billingCharges   BillingCharge[]
+  maintenanceOrders MaintenanceOrder[]
+
+  @@map("tenants")
+}
+
+// ── User ───────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id")
+  clerkId   String   @unique @map("clerk_id")
+  name      String
+  email     String
+  role      UserRole @default(visualizador)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([clerkId])
+  @@map("users")
+}
+
+// ── Owner (proprietário) ───────────────────────────────────────────────────
+
+model Owner {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id")
+  name      String
+  cpfCnpj   String   @map("cpf_cnpj")
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  properties   Property[]
+  ownerAccount OwnerAccount?
+
+  @@index([tenantId])
+  @@map("owners")
+}
+
+// ── OwnerAccount (saldo do proprietário) ──────────────────────────────────
+
+model OwnerAccount {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id")
+  ownerId   String   @unique @map("owner_id")
+  balance   Decimal  @default(0) @db.Decimal(14, 2)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner Owner @relation(fields: [ownerId], references: [id])
+
+  @@index([tenantId])
+  @@map("owner_accounts")
+}
+
+// ── Property (imóvel) ─────────────────────────────────────────────────────
+
+model Property {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @map("tenant_id")
+  ownerId     String         @map("owner_id")
+  code        String?
+  address     String
+  city        String?
+  state       String?
+  zipCode     String?        @map("zip_code")
+  type        PropertyType
+  area        Decimal?       @db.Decimal(8, 2)
+  status      PropertyStatus @default(available)
+  adminFeePct Decimal        @default(10) @map("admin_fee_pct") @db.Decimal(5, 2)
+  rentAmount  Decimal?       @map("rent_amount") @db.Decimal(14, 2)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  deletedAt   DateTime?      @map("deleted_at")
+
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  owner            Owner              @relation(fields: [ownerId], references: [id])
+  leases           Lease[]
+  maintenanceOrders MaintenanceOrder[]
+
+  @@index([tenantId])
+  @@index([ownerId])
+  @@map("properties")
+}
+
+// ── Lease (contrato de locação) ───────────────────────────────────────────
+
+model Lease {
+  id             String      @id @default(uuid()) @db.Uuid
+  tenantId       String      @map("tenant_id")
+  propertyId     String      @map("property_id")
+  tenantName     String      @map("tenant_name")
+  tenantCpf      String?     @map("tenant_cpf")
+  tenantEmail    String?     @map("tenant_email")
+  tenantPhone    String?     @map("tenant_phone")
+  rentAmount     Decimal     @map("rent_amount") @db.Decimal(14, 2)
+  adminFeePct    Decimal     @map("admin_fee_pct") @db.Decimal(5, 2)
+  readjustIndex  String      @default("IGPM") @map("readjust_index")
+  dueDayOfMonth  Int         @default(5) @map("due_day_of_month")
+  startDate      DateTime    @map("start_date")
+  endDate        DateTime    @map("end_date")
+  status         LeaseStatus @default(active)
+  signedAt       DateTime?   @map("signed_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  deletedAt      DateTime?   @map("deleted_at")
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  property       Property        @relation(fields: [propertyId], references: [id])
+  transactions   Transaction[]
+  billingCharges BillingCharge[]
+
+  @@index([tenantId])
+  @@index([propertyId])
+  @@map("leases")
+}
+
+// ── BankAccount ───────────────────────────────────────────────────────────
+
+model BankAccount {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id")
+  name          String
+  bankCode      String   @map("bank_code")
+  agency        String?
+  accountNumber String?  @map("account_number")
+  accountType   String   @default("checking") @map("account_type")
+  isPrimary     Boolean  @default(false) @map("is_primary")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  bankConnection BankConnection?
+  transactions   Transaction[]
+
+  @@index([tenantId])
+  @@map("bank_accounts")
+}
+
+// ── BankConnection (vínculo com Pluggy) ───────────────────────────────────
+
+model BankConnection {
+  id              String    @id @default(uuid()) @db.Uuid
+  bankAccountId   String    @unique @map("bank_account_id")
+  pluggyItemId    String    @map("pluggy_item_id")
+  pluggyAccountId String    @map("pluggy_account_id")
+  status          String    @default("active")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id])
+
+  @@map("bank_connections")
+}
+
+// ── Category ──────────────────────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id")
+  name      String
+  type      String   // income | expense
+  group     String?
+  isSystem  Boolean  @default(false) @map("is_system")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  transactions Transaction[]
+
+  @@index([tenantId])
+  @@map("categories")
+}
+
+// ── Transaction ───────────────────────────────────────────────────────────
+
+model Transaction {
+  id                   String            @id @default(uuid()) @db.Uuid
+  tenantId             String            @map("tenant_id")
+  bankAccountId        String?           @map("bank_account_id")
+  leaseId              String?           @map("lease_id")
+  categoryId           String?           @map("category_id")
+  pluggyTransactionId  String?           @unique @map("pluggy_transaction_id")
+  description          String
+  amount               Decimal           @db.Decimal(14, 2)
+  type                 TransactionType
+  origin               TransactionOrigin @default(manual)
+  status               TransactionStatus @default(pending)
+  date                 DateTime
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  bankAccount BankAccount?       @relation(fields: [bankAccountId], references: [id])
+  lease       Lease?             @relation(fields: [leaseId], references: [id])
+  category    Category?          @relation(fields: [categoryId], references: [id])
+  splits      TransactionSplit[]
+
+  @@index([tenantId])
+  @@index([leaseId])
+  @@index([pluggyTransactionId])
+  @@map("transactions")
+}
+
+// ── TransactionSplit (separação imobiliária vs proprietário) ──────────────
+
+model TransactionSplit {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id")
+  transactionId String   @map("transaction_id")
+  party         String   // "agency" | "owner"
+  amount        Decimal  @db.Decimal(14, 2)
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+
+  @@index([tenantId])
+  @@index([transactionId])
+  @@map("transaction_splits")
+}
+
+// ── BillingCharge (cobrança de aluguel) ───────────────────────────────────
+
+model BillingCharge {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id")
+  leaseId     String        @map("lease_id")
+  amount      Decimal       @db.Decimal(14, 2)
+  dueDate     DateTime      @map("due_date")
+  paidAt      DateTime?     @map("paid_at")
+  paidAmount  Decimal?      @map("paid_amount") @db.Decimal(14, 2)
+  status      BillingStatus @default(pending)
+  type        BillingType   @default(pix)
+  pixCode     String?       @map("pix_code")
+  boletoCode  String?       @map("boleto_code")
+  reference   String?       // "Outubro 2025"
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  lease  Lease  @relation(fields: [leaseId], references: [id])
+
+  @@index([tenantId])
+  @@index([leaseId])
+  @@index([dueDate])
+  @@map("billing_charges")
+}
+
+// ── MaintenanceOrder (ordem de serviço) ───────────────────────────────────
+
+model MaintenanceOrder {
+  id          String            @id @default(uuid()) @db.Uuid
+  tenantId    String            @map("tenant_id")
+  propertyId  String            @map("property_id")
+  title       String
+  description String?
+  status      MaintenanceStatus @default(requested)
+  cost        Decimal?          @db.Decimal(14, 2)
+  supplier    String?
+  scheduledAt DateTime?         @map("scheduled_at")
+  completedAt DateTime?         @map("completed_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([tenantId])
+  @@index([propertyId])
+  @@map("maintenance_orders")
+}

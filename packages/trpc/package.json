@@ -1,0 +1,11 @@
+{
+  "name": "@tenora/trpc",
+  "version": "0.0.1",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@clerk/fastify": "^1.0.51",
+    "@tenora/db": "workspace:*",
+    "@trpc/server": "^11.0.0"
+  }
+}
