@@ -1,159 +1,152 @@
-# Turborepo starter
+# Tenora
 
-This Turborepo starter is maintained by the Turborepo core team.
+Plataforma SaaS de gestão completa para imobiliárias — financeiro, contratos, cobranças e repasses em um único sistema.
 
-## Using this example
+## Setup em 5 comandos
 
-Run the following command:
+```bash
+# 1. Clonar e instalar dependências
+git clone https://github.com/seu-org/tenora.git && cd tenora && pnpm install
 
-```sh
-npx create-turbo@latest
+# 2. Configurar variáveis de ambiente
+cp .env.example .env
+
+# 3. Subir o banco de dados e Redis
+docker compose up -d
+
+# 4. Criar o banco e rodar as migrations
+pnpm db:migrate
+
+# 5. Iniciar o ambiente de desenvolvimento
+pnpm dev
 ```
 
-## What's inside?
+Pronto. Acesse:
 
-This Turborepo includes the following packages/apps:
+| Serviço    | URL                         |
+|------------|-----------------------------|
+| Web        | http://localhost:3000       |
+| API        | http://localhost:3001       |
+| Health     | http://localhost:3001/health|
+| Bull Board | http://localhost:3002       |
+| DB Studio  | `pnpm db:studio` → :5555    |
 
-### Apps and Packages
+---
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Pré-requisitos
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+| Ferramenta | Versão mínima | Verificar         |
+|------------|---------------|-------------------|
+| Node.js    | 20+           | `node --version`  |
+| pnpm       | 8+            | `pnpm --version`  |
+| Docker     | 24+           | `docker --version`|
 
-### Utilities
+---
 
-This Turborepo has some additional tools already setup for you:
+## Estrutura do projeto
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```
+tenora/
+├── apps/
+│   ├── web/          # Next.js 14 — frontend
+│   └── api/          # Fastify + tRPC — backend
+├── packages/
+│   ├── db/           # Prisma schema + client com RLS
+│   ├── trpc/         # Contexto e middlewares tRPC
+│   ├── queues/       # Registry de filas BullMQ
+│   └── validators/   # Schemas Zod compartilhados
+├── infra/
+│   └── docker-compose.yml
+├── .env.example
+└── turbo.json
 ```
 
-Without global `turbo`, use your package manager:
+---
 
-```sh
-cd my-turborepo
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
+## Variáveis de ambiente obrigatórias
+
+Abra o `.env` e preencha pelo menos estas antes de rodar:
+
+```bash
+DATABASE_URL        # ex: postgresql://tenora_app:senha@localhost:5432/tenora_dev
+REDIS_HOST          # localhost em desenvolvimento
+CLERK_SECRET_KEY    # sk_test_... — obtenha em clerk.com
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY  # pk_test_...
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Consulte o `.env.example` para a lista completa com instruções de cada variável.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+---
 
-```sh
-turbo build --filter=docs
+## Comandos úteis
+
+```bash
+# Desenvolvimento
+pnpm dev              # sobe web + api em paralelo com hot reload
+pnpm build            # build de produção (incremental via Turborepo)
+pnpm lint             # lint em todos os pacotes
+pnpm type-check       # type-check TypeScript
+
+# Banco de dados
+pnpm db:migrate       # aplica migrations pendentes
+pnpm db:generate      # regenera o Prisma client após alterar o schema
+pnpm db:seed          # popula com dados de desenvolvimento
+pnpm db:studio        # abre o Prisma Studio no browser
+pnpm db:reset         # apaga e recria o banco do zero
+
+# Docker
+docker compose up -d      # sobe os serviços em background
+docker compose down       # para os serviços (dados preservados)
+docker compose down -v    # para e apaga os dados (reset total)
+docker compose ps         # verifica o status dos containers
 ```
 
-Without global `turbo`:
+---
 
-```sh
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+## Arquitetura
+
+```
+Browser → Next.js middleware (Clerk auth)
+        → Server Component → tRPC client
+        → Fastify (tRPC server) → Prisma + RLS
+        → PostgreSQL (dados isolados por tenant)
+
+Eventos assíncronos:
+  Webhook Pluggy → bank:sync queue (BullMQ/Redis)
+                 → Worker → motor de split
+                 → notification:send queue
 ```
 
-### Develop
+**Multi-tenant:** cada imobiliária é um tenant isolado via Row-Level Security no PostgreSQL. Nunca use `db` diretamente — sempre `prismaWithTenant(tenantId)`.
 
-To develop all apps and packages, run the following command:
+---
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Stack
 
-```sh
-cd my-turborepo
-turbo dev
-```
+| Camada       | Tecnologia                              |
+|--------------|-----------------------------------------|
+| Frontend     | Next.js 14, TypeScript, Tailwind CSS    |
+| Backend      | Fastify, tRPC, Node.js                  |
+| Banco        | PostgreSQL 16 + Prisma ORM + RLS        |
+| Filas        | BullMQ + Redis 7                        |
+| Auth         | Clerk (multi-tenant, RBAC)              |
+| Billing      | Stripe                                  |
+| Open Finance | Pluggy                                  |
+| Pagamentos   | Asaas (PIX + Boleto)                    |
+| Monorepo     | Turborepo + pnpm workspaces             |
+| CI/CD        | GitHub Actions → Vercel + Railway       |
 
-Without global `turbo`, use your package manager:
+---
 
-```sh
-cd my-turborepo
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
+## Contribuindo
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+1. Crie uma branch a partir de `develop`: `git checkout -b feat/nome-da-feature`
+2. Commits seguem [Conventional Commits](https://www.conventionalcommits.org/)
+3. Abra um PR para `develop` — o CI valida lint, tipos e testes automaticamente
+4. Merge em `main` dispara deploy para produção com aprovação manual
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+---
 
-```sh
-turbo dev --filter=web
-```
+## Licença
 
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+Proprietário — Tenora © 2026. Todos os direitos reservados.
