@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import { t } from './index';
+import { t } from './base';
 
 export const isAuthed = t.middleware(({ ctx, next }) => {
   if ( !ctx.user || !ctx.tenantId ) {
