@@ -16,6 +16,8 @@
   "license": "ISC",
   "dependencies": {
     "@clerk/fastify": "^1.0.51",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@prisma/client": "^5.22.0",
     "@tenora/db": "workspace:*",
     "@tenora/queues": "workspace:*",
@@ -24,6 +26,8 @@
     "@trpc/server": "^11.0.0",
     "bullmq": "^5.0.0",
     "fastify": "^5.8.2",
+    "ioredis": "^5.10.1",
+    "svix": "^1.89.0",
     "zod": "^3.0.0"
   },
   "devDependencies": {

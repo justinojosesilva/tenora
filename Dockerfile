@@ -37,12 +37,14 @@ RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
 
 COPY --from=builder /app/deploy ./
 COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
+COPY scripts/entrypoint.sh ./entrypoint.sh
 
 RUN npm install -g prisma@5.22.0 && \
     prisma generate --schema=./packages/db/prisma/schema.prisma
 
-RUN chown -R nodejs:nodejs /app
+RUN chmod +x ./entrypoint.sh && \
+    chown -R nodejs:nodejs /app
 USER nodejs
 
 EXPOSE 3001
-CMD ["node", "dist/server.js"]
+CMD ["./entrypoint.sh"]

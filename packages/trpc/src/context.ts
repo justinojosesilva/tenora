@@ -2,6 +2,7 @@ import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify'
 import { getAuth } from '@clerk/fastify'
 import { prismaWithTenant, db as rootDb } from '@tenora/db'
 import { TRPCError } from '@trpc/server'
+import { TenantStatus } from '@prisma/client'
 
 export async function createContext({ req }: CreateFastifyContextOptions) {
   const { userId, orgId } = getAuth(req) || {}
@@ -21,7 +22,13 @@ export async function createContext({ req }: CreateFastifyContextOptions) {
     throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Usuário não encontrado!' })
   }
 
-  return { user, db: tenantDb, tenantId: orgId }
+  // Validar se o tenant está ativo
+  const tenant = await rootDb.tenant.findUnique({ where: { id: orgId } })
+  if (!tenant || tenant.status !== TenantStatus.active) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Tenant inativo ou suspenso.' })
+  }
+
+  return { user, db: tenantDb, tenantId: orgId, tenant }
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>

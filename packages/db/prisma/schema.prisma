@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DATABASE_URL_MIGRATOR")
 }
 
 // ── Enums ──────────────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ enum MaintenanceStatus {
 // ── Tenant (imobiliária) ───────────────────────────────────────────────────
 
 model Tenant {
-  id        String       @id @default(uuid()) @db.Uuid
+  id        String       @id @default(uuid())
   name      String
   cnpj      String?      @unique
   slug      String       @unique
@@ -117,7 +118,7 @@ model Tenant {
 // ── User ───────────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid())
   tenantId  String   @map("tenant_id")
   clerkId   String   @unique @map("clerk_id")
   name      String
@@ -137,7 +138,7 @@ model User {
 // ── Owner (proprietário) ───────────────────────────────────────────────────
 
 model Owner {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid())
   tenantId  String   @map("tenant_id")
   name      String
   cpfCnpj   String   @map("cpf_cnpj")
@@ -158,7 +159,7 @@ model Owner {
 // ── OwnerAccount (saldo do proprietário) ──────────────────────────────────
 
 model OwnerAccount {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid())
   tenantId  String   @map("tenant_id")
   ownerId   String   @unique @map("owner_id")
   balance   Decimal  @default(0) @db.Decimal(14, 2)
@@ -173,7 +174,7 @@ model OwnerAccount {
 // ── Property (imóvel) ─────────────────────────────────────────────────────
 
 model Property {
-  id          String         @id @default(uuid()) @db.Uuid
+  id          String         @id @default(uuid())
   tenantId    String         @map("tenant_id")
   ownerId     String         @map("owner_id")
   code        String?
@@ -203,7 +204,7 @@ model Property {
 // ── Lease (contrato de locação) ───────────────────────────────────────────
 
 model Lease {
-  id             String      @id @default(uuid()) @db.Uuid
+  id             String      @id @default(uuid())
   tenantId       String      @map("tenant_id")
   propertyId     String      @map("property_id")
   tenantName     String      @map("tenant_name")
@@ -235,7 +236,7 @@ model Lease {
 // ── BankAccount ───────────────────────────────────────────────────────────
 
 model BankAccount {
-  id            String   @id @default(uuid()) @db.Uuid
+  id            String   @id @default(uuid())
   tenantId      String   @map("tenant_id")
   name          String
   bankCode      String   @map("bank_code")
@@ -257,7 +258,7 @@ model BankAccount {
 // ── BankConnection (vínculo com Pluggy) ───────────────────────────────────
 
 model BankConnection {
-  id              String    @id @default(uuid()) @db.Uuid
+  id              String    @id @default(uuid())
   bankAccountId   String    @unique @map("bank_account_id")
   pluggyItemId    String    @map("pluggy_item_id")
   pluggyAccountId String    @map("pluggy_account_id")
@@ -273,7 +274,7 @@ model BankConnection {
 // ── Category ──────────────────────────────────────────────────────────────
 
 model Category {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid())
   tenantId  String   @map("tenant_id")
   name      String
   type      String   // income | expense
@@ -291,7 +292,7 @@ model Category {
 // ── Transaction ───────────────────────────────────────────────────────────
 
 model Transaction {
-  id                   String            @id @default(uuid()) @db.Uuid
+  id                   String            @id @default(uuid())
   tenantId             String            @map("tenant_id")
   bankAccountId        String?           @map("bank_account_id")
   leaseId              String?           @map("lease_id")
@@ -321,7 +322,7 @@ model Transaction {
 // ── TransactionSplit (separação imobiliária vs proprietário) ──────────────
 
 model TransactionSplit {
-  id            String   @id @default(uuid()) @db.Uuid
+  id            String   @id @default(uuid())
   tenantId      String   @map("tenant_id")
   transactionId String   @map("transaction_id")
   party         String   // "agency" | "owner"
@@ -339,7 +340,7 @@ model TransactionSplit {
 // ── BillingCharge (cobrança de aluguel) ───────────────────────────────────
 
 model BillingCharge {
-  id          String        @id @default(uuid()) @db.Uuid
+  id          String        @id @default(uuid())
   tenantId    String        @map("tenant_id")
   leaseId     String        @map("lease_id")
   amount      Decimal       @db.Decimal(14, 2)
@@ -366,7 +367,7 @@ model BillingCharge {
 // ── MaintenanceOrder (ordem de serviço) ───────────────────────────────────
 
 model MaintenanceOrder {
-  id          String            @id @default(uuid()) @db.Uuid
+  id          String            @id @default(uuid())
   tenantId    String            @map("tenant_id")
   propertyId  String            @map("property_id")
   title       String
