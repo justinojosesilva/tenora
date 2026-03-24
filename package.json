@@ -13,14 +13,26 @@
     "db:generate": "pnpm --filter @tenora/db db:generate",
     "db:studio": "pnpm --filter @tenora/db db:studio",
     "db:seed": "pnpm --filter @tenora/db db:seed",
-    "db:reset": "pnpm --filter @tenora/db db:reset"
+    "db:reset": "pnpm --filter @tenora/db db:reset",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0",
     "prettier": "^3.7.4",
     "turbo": "^2.8.20",
     "typescript": "5.9.2",
     "vitest": "^4.1.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,mjs,cjs,json,md,yaml,yml}": [
+      "prettier --write"
+    ]
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {

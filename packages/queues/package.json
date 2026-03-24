@@ -8,5 +8,8 @@
   },
   "dependencies": {
     "bullmq": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tenora/eslint-config": "workspace:*"
   }
 }

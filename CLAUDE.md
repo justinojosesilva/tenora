@@ -32,6 +32,7 @@ docker compose up -d
 ## Architecture
 
 ### Monorepo Structure
+
 - **`apps/api`** — Fastify 5 + tRPC 11 backend. Entry: `src/server.ts`. Built with tsup to a single ESM bundle.
 - **`apps/web`** — Next.js 14 + React 19 frontend.
 - **`packages/db`** — Prisma ORM client and Row-Level Security utilities. Exports `db` (root) and `prismaWithTenant(tenantId)`.
@@ -40,24 +41,30 @@ docker compose up -d
 - **`packages/queues`** — BullMQ queue definitions for async jobs.
 
 ### Multi-Tenancy (Critical)
+
 The app uses PostgreSQL Row-Level Security for tenant isolation:
+
 - Every request sets `app.tenant_id` via a Prisma extension in `packages/db/src/rls.ts`.
 - Use `prismaWithTenant(tenantId)` for all tenant-scoped queries — never use the root `db` directly in application code.
 - `safeDb` proxy blocks accidental direct model access without tenant context.
 - `tenantId` comes from Clerk's `orgId` (organization ID), extracted in `packages/trpc/src/context.ts`.
 
 ### Authentication & Authorization
+
 - Auth is handled by Clerk. The tRPC context (`packages/trpc/src/context.ts`) extracts `userId` and `orgId` from the JWT via Fastify's Clerk plugin.
 - **Roles**: `admin`, `financeiro`, `operacional`, `visualizador` — enforced via `requireRole()` middleware.
 - Use `protectedProcedure` for all authenticated routes; `adminProcedure` for admin-only routes.
 
 ### Adding a New tRPC Router
+
 1. Create `apps/api/src/routers/<name>.router.ts` using `protectedProcedure` from `@tenora/trpc`.
 2. Register it in `apps/api/src/routers/_app.router.ts`.
 3. Add input validation with a Zod schema (define in `packages/validators/` if shared with the web).
 
 ### Database Schema
+
 Domain models in `packages/db/prisma/schema.prisma`:
+
 - **Tenant** → **User** (employees), **Owner** (property owners), **Property**, **Lease**
 - **Lease** → **BillingCharge** (cobranças), **TransactionSplit**
 - **BankConnection** / **BankAccount** → **Transaction** (synced via Pluggy)
@@ -65,7 +72,9 @@ Domain models in `packages/db/prisma/schema.prisma`:
 - Operations: `MaintenanceOrder`
 
 ### Environment Variables
+
 Two database URLs are required (RLS design):
+
 - `DATABASE_URL` — app user (subject to RLS)
 - `DATABASE_URL_MIGRATOR` — migrator user with `BYPASSRLS` (used only by Prisma migrations)
 - `DATABASE_SHADOW_URL` — shadow DB for migration validation
@@ -74,5 +83,6 @@ Two database URLs are required (RLS design):
 - External integrations: Stripe, Pluggy, Asaas keys
 
 ### Deployment
+
 - API builds to `dist/server.js` (single ESM bundle). The root `Dockerfile` is a multi-stage build targeting the API for Railway.
 - Web deploys to Vercel.

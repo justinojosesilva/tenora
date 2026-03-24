@@ -23,23 +23,23 @@ pnpm dev
 
 Pronto. Acesse:
 
-| Serviço    | URL                         |
-|------------|-----------------------------|
-| Web        | http://localhost:3000       |
-| API        | http://localhost:3001       |
-| Health     | http://localhost:3001/health|
-| Bull Board | http://localhost:3002       |
-| DB Studio  | `pnpm db:studio` → :5555    |
+| Serviço    | URL                          |
+| ---------- | ---------------------------- |
+| Web        | http://localhost:3000        |
+| API        | http://localhost:3001        |
+| Health     | http://localhost:3001/health |
+| Bull Board | http://localhost:3002        |
+| DB Studio  | `pnpm db:studio` → :5555     |
 
 ---
 
 ## Pré-requisitos
 
-| Ferramenta | Versão mínima | Verificar         |
-|------------|---------------|-------------------|
-| Node.js    | 20+           | `node --version`  |
-| pnpm       | 8+            | `pnpm --version`  |
-| Docker     | 24+           | `docker --version`|
+| Ferramenta | Versão mínima | Verificar          |
+| ---------- | ------------- | ------------------ |
+| Node.js    | 20+           | `node --version`   |
+| pnpm       | 8+            | `pnpm --version`   |
+| Docker     | 24+           | `docker --version` |
 
 ---
 
@@ -123,18 +123,18 @@ Eventos assíncronos:
 
 ## Stack
 
-| Camada       | Tecnologia                              |
-|--------------|-----------------------------------------|
-| Frontend     | Next.js 14, TypeScript, Tailwind CSS    |
-| Backend      | Fastify, tRPC, Node.js                  |
-| Banco        | PostgreSQL 16 + Prisma ORM + RLS        |
-| Filas        | BullMQ + Redis 7                        |
-| Auth         | Clerk (multi-tenant, RBAC)              |
-| Billing      | Stripe                                  |
-| Open Finance | Pluggy                                  |
-| Pagamentos   | Asaas (PIX + Boleto)                    |
-| Monorepo     | Turborepo + pnpm workspaces             |
-| CI/CD        | GitHub Actions → Vercel + Railway       |
+| Camada       | Tecnologia                           |
+| ------------ | ------------------------------------ |
+| Frontend     | Next.js 14, TypeScript, Tailwind CSS |
+| Backend      | Fastify, tRPC, Node.js               |
+| Banco        | PostgreSQL 16 + Prisma ORM + RLS     |
+| Filas        | BullMQ + Redis 7                     |
+| Auth         | Clerk (multi-tenant, RBAC)           |
+| Billing      | Stripe                               |
+| Open Finance | Pluggy                               |
+| Pagamentos   | Asaas (PIX + Boleto)                 |
+| Monorepo     | Turborepo + pnpm workspaces          |
+| CI/CD        | GitHub Actions → Vercel + Railway    |
 
 ---
 

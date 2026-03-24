@@ -1,8 +1,9 @@
 // packages/eslint-config/index.js
-import js from "@eslint/js";
-import tseslint from "typescript-eslint";
-import turboPlugin from "eslint-plugin-turbo";
-import onlyWarn from "eslint-plugin-only-warn";
+import js from '@eslint/js'
+import tseslint from 'typescript-eslint'
+import turboPlugin from 'eslint-plugin-turbo'
+import onlyWarn from 'eslint-plugin-only-warn'
+import eslintConfigPrettier from 'eslint-config-prettier'
 
 /** @type {import('eslint').Linter.Config[]} */
 export const baseConfig = [
@@ -11,19 +12,17 @@ export const baseConfig = [
   {
     plugins: {
       turbo: turboPlugin,
-      "only-warn": onlyWarn,
+      'only-warn': onlyWarn,
     },
     rules: {
-      "turbo/no-undeclared-env-vars": "warn",
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        { argsIgnorePattern: "^_" },
-      ],
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/consistent-type-imports": "warn",
+      'turbo/no-undeclared-env-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/consistent-type-imports': 'warn',
     },
   },
   {
-    ignores: ["dist/**", ".next/**", "node_modules/**", "*.config.js"],
+    ignores: ['dist/**', '.next/**', 'node_modules/**', '*.config.js'],
   },
-];
+  eslintConfigPrettier,
+]

@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client'
 
 const withTenantExtension = (tenantId: string) =>
   Prisma.defineExtension({
@@ -13,33 +13,32 @@ const withTenantExtension = (tenantId: string) =>
               SELECT set_config('app.tenant_id', ${tenantId}, TRUE)
             `,
             query(args),
-          ]);
-          return result;
+          ])
+          return result
         },
       },
-    }
+    },
   })
 
 // Cliente base - sem RLS (usado apenas para migrations e seed)
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = global as unknown as { prisma: PrismaClient }
 
-export const db = globalForPrisma.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development'
-    ? ['query', 'error', 'warn']
-    : ['warn','error'],
-})
+export const db =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['warn', 'error'],
+  })
 
 if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = db;
+  globalForPrisma.prisma = db
 }
 
 // Cliente com RLS - usado em TODA a aplicação
 export function prismaWithTenant(tenantId: string) {
   if (!tenantId) {
-    throw new Error('[RLS] tenantId é obrigatório. Nunca use o db root na aplicação.');
+    throw new Error('[RLS] tenantId é obrigatório. Nunca use o db root na aplicação.')
   }
-  return db.$extends(withTenantExtension(tenantId));
+  return db.$extends(withTenantExtension(tenantId))
 }
 
-export type TenantDB = ReturnType<typeof prismaWithTenant>;
-  
+export type TenantDB = ReturnType<typeof prismaWithTenant>
