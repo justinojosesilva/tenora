@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient }
@@ -12,7 +13,10 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = db
 }
 
-export async function withTenantRLS<T>(tenantId: string, fn: (tx: PrismaClient) => Promise<T>) {
+export async function withTenantRLS<T>(
+  tenantId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+) {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`
       SELECT set_config('app.tenant_id', ${tenantId}, TRUE)

@@ -1,2 +1,2 @@
 export * from './property.schema'
-export {}
+export * from './user.schema'

@@ -10,6 +10,7 @@ interface OrganizationMembershipCreatedPayload {
     object: string
     status: 'active' | 'pending_invitation'
     role: string
+    public_metadata?: Record<string, string>
     public_organization_data?: {
       id: string
       name: string
@@ -106,6 +107,13 @@ export async function registerWebhooks(server: FastifyInstance) {
           const { prismaWithTenant } = await import('@tenora/db')
           const tenantDb = prismaWithTenant(tenantId)
 
+          // Extrair role dos metadados do convite (salvo pelo usersRouter.invite)
+          const invitationRole = payload.data.public_metadata?.role as UserRole | undefined
+          const role =
+            invitationRole && Object.values(UserRole).includes(invitationRole)
+              ? invitationRole
+              : UserRole.visualizador
+
           await tenantDb.user.upsert({
             where: { clerkId: userId },
             create: {
@@ -113,7 +121,7 @@ export async function registerWebhooks(server: FastifyInstance) {
               clerkId: userId,
               email: email || 'unknown@example.com',
               name: name || 'Novo Usuário',
-              role: UserRole.visualizador,
+              role,
             },
             update: {
               email: email || undefined,
