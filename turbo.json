@@ -1,6 +1,28 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "DATABASE_URL_MIGRATOR",
+    "DATABASE_SHADOW_URL",
+    "REDIS_HOST",
+    "REDIS_PORT",
+    "REDIS_PASSWORD",
+    "CLERK_SECRET_KEY",
+    "CLERK_WEBHOOK_SECRET",
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    "SENTRY_DSN",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT",
+    "SENTRY_AUTH_TOKEN",
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "NEXT_PUBLIC_POSTHOG_KEY",
+    "NEXT_PUBLIC_POSTHOG_HOST",
+    "LOG_LEVEL",
+    "API_PORT",
+    "ALLOWED_ORIGINS"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build", "db:generate"],
@@ -27,6 +49,6 @@
       "outputs": ["node_modules/.prisma/**", "../../node_modules/.prisma/**"]
     },
     "db:migrate": { "cache": false },
-    "db:seed":    { "cache": false }
+    "db:seed": { "cache": false }
   }
 }

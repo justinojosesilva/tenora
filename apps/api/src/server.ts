@@ -1,3 +1,7 @@
+// Sentry DEVE ser inicializado antes de qualquer outro import
+import './instrumentation.js'
+
+import * as Sentry from '@sentry/node'
 import Fastify from 'fastify'
 import { clerkPlugin, getAuth } from '@clerk/fastify'
 import cors from '@fastify/cors'
@@ -44,7 +48,7 @@ await server.register(rateLimit, {
   allowList: ['/health'],
 })
 
-// Hook para log com tenantId e userId (preHandler: after Clerk sets req.auth)
+// Hook: log estruturado + enriquecimento do scope Sentry com userId e tenantId
 server.addHook('preHandler', async (request) => {
   const auth = getAuth(request)
   if (auth?.userId && auth?.orgId) {
@@ -54,6 +58,9 @@ server.addHook('preHandler', async (request) => {
       path: request.url,
       method: request.method,
     })
+
+    Sentry.setUser({ id: auth.userId })
+    Sentry.setTag('tenantId', auth.orgId)
   }
 })
 
@@ -106,6 +113,9 @@ server.get('/health', async () => {
   }
 })
 
+// Registrar error handler do Sentry (captura exceções não tratadas do Fastify)
+Sentry.setupFastifyErrorHandler(server)
+
 const start = async () => {
   try {
     await startWorkers()
@@ -113,6 +123,7 @@ const start = async () => {
     await server.listen({ port, host: '0.0.0.0' })
     server.log.info(`🚀 Server is running at http://0.0.0.0:${port}`)
   } catch (err) {
+    Sentry.captureException(err)
     server.log.error(err)
     process.exit(1)
   }

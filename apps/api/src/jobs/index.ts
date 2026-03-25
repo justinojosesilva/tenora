@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node'
 import { Worker } from 'bullmq'
 import {
   QUEUE_NAMES,
@@ -39,15 +40,30 @@ async function moveToDlq(
     opts: { attempts?: number }
     data: unknown
   },
-  failedReason: string,
+  err: Error,
 ) {
   const maxAttempts = job.opts.attempts ?? 3
+
+  // Captura no Sentry com contexto do job
+  Sentry.withScope((scope) => {
+    scope.setTag('queue', queue)
+    scope.setTag('jobName', job.name)
+    scope.setContext('job', {
+      id: job.id,
+      attemptsMade: job.attemptsMade,
+      maxAttempts,
+      data: job.data,
+    })
+    Sentry.captureException(err)
+  })
+
+  // Move para DLQ após esgotar tentativas
   if (job.attemptsMade >= maxAttempts) {
     await dlqQueue.add('failed-job', {
       originalQueue: queue,
       originalJobId: job.id,
       originalJobName: job.name,
-      failedReason,
+      failedReason: err.message,
       originalData: job.data,
     })
   }
@@ -70,7 +86,7 @@ function createBankSyncWorker() {
   )
 
   worker.on('failed', async (job, err) => {
-    if (job) await moveToDlq(QUEUE_NAMES.BANK_SYNC, job, err.message)
+    if (job) await moveToDlq(QUEUE_NAMES.BANK_SYNC, job, err)
   })
 
   return worker
@@ -89,7 +105,7 @@ function createBillingGenerateWorker() {
   )
 
   worker.on('failed', async (job, err) => {
-    if (job) await moveToDlq(QUEUE_NAMES.BILLING_GENERATE, job, err.message)
+    if (job) await moveToDlq(QUEUE_NAMES.BILLING_GENERATE, job, err)
   })
 
   return worker
@@ -108,7 +124,7 @@ function createFinancialRepasseWorker() {
   )
 
   worker.on('failed', async (job, err) => {
-    if (job) await moveToDlq(QUEUE_NAMES.FINANCIAL_REPASSE, job, err.message)
+    if (job) await moveToDlq(QUEUE_NAMES.FINANCIAL_REPASSE, job, err)
   })
 
   return worker
@@ -127,7 +143,7 @@ function createNotificationSendWorker() {
   )
 
   worker.on('failed', async (job, err) => {
-    if (job) await moveToDlq(QUEUE_NAMES.NOTIFICATION_SEND, job, err.message)
+    if (job) await moveToDlq(QUEUE_NAMES.NOTIFICATION_SEND, job, err)
   })
 
   return worker

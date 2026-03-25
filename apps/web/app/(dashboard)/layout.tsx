@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { AppTopbar } from '@/components/layout/app-topbar'
 import { SidebarSkeleton } from '@/components/layout/sidebar-skeleton'
+import { PageViewTracker } from '@/components/analytics/page-view-tracker'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { userId, orgId } = await auth()
@@ -21,6 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <PageViewTracker />
       <Suspense fallback={<SidebarSkeleton />}>
         <AppSidebar orgName={org.name} userName={userName} userImageUrl={user?.imageUrl} />
       </Suspense>
