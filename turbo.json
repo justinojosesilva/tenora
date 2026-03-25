@@ -21,7 +21,14 @@
     "NEXT_PUBLIC_POSTHOG_HOST",
     "LOG_LEVEL",
     "API_PORT",
-    "ALLOWED_ORIGINS"
+    "ALLOWED_ORIGINS",
+    "E2E_BASE_URL",
+    "E2E_API_URL",
+    "E2E_USER_A_EMAIL",
+    "E2E_USER_A_PASSWORD",
+    "E2E_USER_B_EMAIL",
+    "E2E_USER_B_PASSWORD",
+    "CI"
   ],
   "tasks": {
     "build": {
@@ -49,6 +56,10 @@
       "outputs": ["node_modules/.prisma/**", "../../node_modules/.prisma/**"]
     },
     "db:migrate": { "cache": false },
-    "db:seed": { "cache": false }
+    "db:seed": { "cache": false },
+    "e2e": {
+      "cache": false,
+      "outputs": ["playwright-report/**", "test-results/**"]
+    }
   }
 }

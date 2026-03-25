@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       # 3. Setup pnpm
       - name: Setup pnpm
@@ -78,3 +78,69 @@ jobs:
       # 10. Build
       - name: Build
         run: pnpm build
+
+  e2e:
+    name: Testes E2E (smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: ci # roda somente após lint/type-check/test/build passarem
+
+    # Roda apenas quando as secrets de staging estiverem configuradas
+    if: |
+      vars.E2E_BASE_URL != '' &&
+      secrets.E2E_USER_A_EMAIL != ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          run_install: false
+
+      - name: Obter caminho do cache pnpm
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      # Instala apenas o Chromium para reduzir tempo de download
+      - name: Instalar Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Rodar testes E2E
+        run: pnpm --filter @tenora/web e2e
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          E2E_API_URL: ${{ vars.E2E_API_URL }}
+          E2E_USER_A_EMAIL: ${{ secrets.E2E_USER_A_EMAIL }}
+          E2E_USER_A_PASSWORD: ${{ secrets.E2E_USER_A_PASSWORD }}
+          E2E_USER_B_EMAIL: ${{ secrets.E2E_USER_B_EMAIL }}
+          E2E_USER_B_PASSWORD: ${{ secrets.E2E_USER_B_PASSWORD }}
+
+      # Faz upload do relatório HTML e screenshots em caso de falha
+      - name: Upload relatório Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: apps/web/playwright-report/
+          retention-days: 7
