@@ -28,6 +28,17 @@ interface OrganizationMembershipCreatedPayload {
   }
 }
 
+interface OrganizationCreatedPayload {
+  type: 'organization.created'
+  data: {
+    id: string
+    name: string
+    slug: string
+    public_metadata?: Record<string, unknown>
+    created_by?: string
+  }
+}
+
 interface UserUpdatedPayload {
   type: 'user.updated'
   data: {
@@ -40,7 +51,10 @@ interface UserUpdatedPayload {
   }
 }
 
-type ClerkWebhookEvent = OrganizationMembershipCreatedPayload | UserUpdatedPayload
+type ClerkWebhookEvent =
+  | OrganizationMembershipCreatedPayload
+  | OrganizationCreatedPayload
+  | UserUpdatedPayload
 
 export async function registerWebhooks(server: FastifyInstance) {
   server.post('/webhooks/clerk', async (request, reply) => {
@@ -130,6 +144,34 @@ export async function registerWebhooks(server: FastifyInstance) {
           })
 
           server.log.info({ msg: 'User sincronizado do webhook', userId, tenantId })
+          break
+        }
+
+        case 'organization.created': {
+          const payload = event as OrganizationCreatedPayload
+          const orgId = payload.data.id
+          const orgName = payload.data.name
+          const slug = payload.data.slug
+          const meta = payload.data.public_metadata ?? {}
+          const cnpj = typeof meta.cnpj === 'string' ? meta.cnpj : null
+
+          // Upsert tenant — idempotente caso webhook chegue duplicado
+          await rootDb.tenant.upsert({
+            where: { id: orgId },
+            create: {
+              id: orgId,
+              name: orgName,
+              slug: slug || orgId,
+              cnpj,
+            },
+            update: {
+              name: orgName,
+              slug: slug || undefined,
+              cnpj: cnpj || undefined,
+            },
+          })
+
+          server.log.info({ msg: 'Tenant criado via webhook', orgId, orgName })
           break
         }
 
