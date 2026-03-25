@@ -1,8 +1,7 @@
 import Fastify from 'fastify'
-import clerkPlugin from '@clerk/fastify'
+import { clerkPlugin, getAuth } from '@clerk/fastify'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
-import { getAuth } from '@clerk/fastify'
 import { appRouter } from './routers/_app.router.js'
 import { createContext } from '@tenora/trpc'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
@@ -26,8 +25,9 @@ const server = Fastify({
 })
 
 // Registrar Clerk
-server.register(clerkPlugin as any, {
+server.register(clerkPlugin, {
   secretKey: process.env.CLERK_SECRET_KEY,
+  publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
 })
 
 // Registrar CORS
@@ -44,8 +44,8 @@ await server.register(rateLimit, {
   allowList: ['/health'],
 })
 
-// Hook para log com tenantId e userId
-server.addHook('onRequest', async (request) => {
+// Hook para log com tenantId e userId (preHandler: after Clerk sets req.auth)
+server.addHook('preHandler', async (request) => {
   const auth = getAuth(request)
   if (auth?.userId && auth?.orgId) {
     server.log.info({

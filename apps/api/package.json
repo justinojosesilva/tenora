@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file=.env src/server.ts",
     "build": "tsup",
     "lint": "eslint src/",
     "type-check": "tsc --noEmit",
@@ -16,7 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@clerk/backend": "^3.2.2",
-    "@clerk/fastify": "^1.0.51",
+    "@clerk/fastify": "^3.1.5",
     "@fastify/cors": "^11.2.0",
     "@fastify/rate-limit": "^10.3.0",
     "@prisma/client": "^5.22.0",
@@ -27,6 +27,7 @@
     "@trpc/server": "^11.0.0",
     "bullmq": "^5.0.0",
     "fastify": "^5.8.2",
+    "fastify-plugin": "^5.1.0",
     "ioredis": "^5.10.1",
     "svix": "^1.89.0",
     "zod": "^3.0.0"

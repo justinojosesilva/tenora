@@ -1,4 +1,4 @@
-import { db, prismaWithTenant } from './rls'
+import { db, prismaWithTenant } from './rls.js'
 
 // Proxy que bloqueia acesso direto ao db root fora das migrations e seed
 const ALLOWED_RAW_METHODS = ['$queryRaw', '$executeRaw', '$transaction', '$connect', '$disconnect']

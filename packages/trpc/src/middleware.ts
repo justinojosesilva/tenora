@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import type { UserRole } from '@prisma/client'
-import { t } from './base'
+import { t } from './base.js'
 
 export const isAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.user || !ctx.tenantId) {

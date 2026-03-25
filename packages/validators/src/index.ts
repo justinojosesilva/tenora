@@ -1,2 +1,2 @@
-export * from './property.schema'
-export * from './user.schema'
+export * from './property.schema.js'
+export * from './user.schema.js'

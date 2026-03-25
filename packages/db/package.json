@@ -20,5 +20,12 @@
     "@tenora/eslint-config": "workspace:*",
     "prisma": "^5.22.0",
     "tsx": "^4.21.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   }
 }
