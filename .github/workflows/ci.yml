@@ -11,6 +11,32 @@ concurrency:
   cancel-in-progress: true # cancela runs antigas do mesmo PR
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tenora_test
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tenora_test
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install
+      - run: pnpm --filter @tenora/db exec prisma migrate deploy
+      - run: pnpm test
   ci:
     name: Lint, type-check, test e build
     runs-on: ubuntu-latest
