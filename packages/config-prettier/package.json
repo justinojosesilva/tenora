@@ -1,0 +1,8 @@
+{
+  "name": "@tenora/config-prettier",
+  "version": "0.0.1",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  }
+}

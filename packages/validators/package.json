@@ -1,9 +1,19 @@
 {
   "name": "@tenora/validators",
   "version": "0.0.1",
+  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "dependencies": {
     "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@tenora/eslint-config": "workspace:*"
   }
 }

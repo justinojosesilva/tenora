@@ -13,10 +13,19 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^5.22.0",
+    "dotenv": "^17.3.1"
   },
   "devDependencies": {
+    "@tenora/eslint-config": "workspace:*",
     "prisma": "^5.22.0",
     "tsx": "^4.21.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   }
 }

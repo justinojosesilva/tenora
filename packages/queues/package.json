@@ -8,5 +8,15 @@
   },
   "dependencies": {
     "bullmq": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tenora/eslint-config": "workspace:*"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   }
 }

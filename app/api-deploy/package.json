@@ -1,0 +1,34 @@
+{
+  "name": "@tenora/api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup",
+    "lint": "eslint src/",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@clerk/fastify": "^1.0.51",
+    "@prisma/client": "^5.22.0",
+    "@tenora/db": "workspace:*",
+    "@tenora/queues": "workspace:*",
+    "@tenora/trpc": "workspace:*",
+    "@tenora/validators": "workspace:*",
+    "@trpc/server": "^11.0.0",
+    "bullmq": "^5.0.0",
+    "fastify": "^5.8.2",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@tenora/eslint-config": "workspace:*",
+    "@tenora/typescript-config": "workspace:*",
+    "tsup": "^8.5.1"
+  }
+}
