@@ -164,7 +164,7 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder_for_build_only
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dGVzdCQ
 
   e2e:
     name: Testes E2E (smoke)
