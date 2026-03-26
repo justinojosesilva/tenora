@@ -49,7 +49,9 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "inputs": ["src/**", "test/**", "vitest.config.ts"]
+      "inputs": ["src/**", "test/**", "vitest.config.ts"],
+      "env": ["DATABASE_URL", "DATABASE_URL_MIGRATOR"],
+      "cache": false
     },
     "db:generate": {
       "cache": false,

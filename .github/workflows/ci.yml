@@ -93,6 +93,9 @@ jobs:
 
       - name: Run tests
         run: pnpm --filter @tenora/db test
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL_MIGRATOR: ${{ env.DATABASE_URL_MIGRATOR }}
   ci:
     name: Lint, type-check, test e build
     runs-on: ubuntu-latest
