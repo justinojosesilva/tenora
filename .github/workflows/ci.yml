@@ -156,9 +156,9 @@ jobs:
       - name: Type-check
         run: pnpm type-check
 
-      # 9. Testes
+      # 9. Testes (db é testado no job dedicado com Postgres)
       - name: Testes
-        run: pnpm test
+        run: pnpm turbo test --filter=!@tenora/db
 
       # 10. Build
       - name: Build
