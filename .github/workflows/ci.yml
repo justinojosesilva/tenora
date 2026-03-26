@@ -87,8 +87,7 @@ jobs:
 
     # Roda apenas quando as secrets de staging estiverem configuradas
     if: |
-      vars.E2E_BASE_URL != '' &&
-      secrets.E2E_USER_A_EMAIL != ''
+      vars.E2E_BASE_URL != ''
 
     steps:
       - name: Checkout
