@@ -15,10 +15,10 @@ export const redisConnection: ConnectionOptions = {
 // ---------------------------------------------------------------------------
 
 export const QUEUE_NAMES = {
-  BANK_SYNC: 'bank:sync',
-  BILLING_GENERATE: 'billing:generate',
-  FINANCIAL_REPASSE: 'financial:repasse',
-  NOTIFICATION_SEND: 'notification:send',
+  BANK_SYNC: 'bank-sync',
+  BILLING_GENERATE: 'billing-generate',
+  FINANCIAL_REPASSE: 'financial-repasse',
+  NOTIFICATION_SEND: 'notification-send',
   DLQ: 'dlq',
 } as const
 
