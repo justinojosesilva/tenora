@@ -31,6 +31,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tenora_test
+      DATABASE_URL_MIGRATOR: postgresql://postgres:postgres@localhost:5432/tenora_test
 
     steps:
       - uses: actions/checkout@v4
