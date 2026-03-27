@@ -15,4 +15,22 @@ Sentry.init({
 
   // Não logar no console em produção
   debug: process.env.NODE_ENV === 'development',
+
+  // Filtra erros originados em extensões de browser, crawlers e scripts de terceiros
+  beforeSend(event) {
+    const frames = event.exception?.values?.[0]?.stacktrace?.frames ?? []
+    if (frames.length === 0) return event
+
+    const hasAppFrame = frames.some((f) => {
+      const file = f.filename ?? ''
+      return (
+        !file.startsWith('chrome-extension://') &&
+        !file.startsWith('moz-extension://') &&
+        !file.includes('/node_modules/') &&
+        file !== '<anonymous>'
+      )
+    })
+
+    return hasAppFrame ? event : null
+  },
 })

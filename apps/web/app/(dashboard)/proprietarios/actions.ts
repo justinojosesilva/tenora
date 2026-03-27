@@ -9,6 +9,8 @@ export type OwnerFormState = {
   error?: string
   fieldErrors?: Record<string, string[]>
   success?: boolean
+  ownerId?: string
+  ownerName?: string
 } | null
 
 export async function createOwnerAction(
@@ -37,13 +39,14 @@ export async function createOwnerAction(
   })
   if (existing) return { error: 'Já existe um proprietário com este CPF/CNPJ' }
 
-  await db.$transaction(async (tx) => {
+  const created = await db.$transaction(async (tx) => {
     const owner = await tx.owner.create({ data: { ...parsed.data, tenantId: orgId } })
     await tx.ownerAccount.create({ data: { tenantId: orgId, ownerId: owner.id, balance: 0 } })
+    return owner
   })
 
   revalidatePath('/proprietarios')
-  return { success: true }
+  return { success: true, ownerId: created.id, ownerName: created.name }
 }
 
 export async function updateOwnerAction(

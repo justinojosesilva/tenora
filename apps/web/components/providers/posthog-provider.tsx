@@ -3,7 +3,7 @@
 import posthog from 'posthog-js'
 import { PostHogProvider as PHProvider, usePostHog } from 'posthog-js/react'
 import { useAuth } from '@clerk/nextjs'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 // ---------------------------------------------------------------------------
 // Init PostHog (executado uma única vez no client)
@@ -26,21 +26,30 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
 function PostHogIdentifier() {
   const { userId, orgId } = useAuth()
   const ph = usePostHog()
+  // undefined = estado inicial (auth carregando); null = deslogado; string = logado
+  const prevUserIdRef = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
     if (!ph) return
 
     if (userId) {
-      // Identifica com userId do Clerk; orgId como propriedade de grupo
+      // Dispara 'login' apenas quando userId transita de null (deslogado) → string
+      // Evita disparar em reloads onde o usuário já estava autenticado
+      if (prevUserIdRef.current === null) {
+        ph.capture('login')
+      }
       ph.identify(userId, { orgId: orgId ?? null })
-
       if (orgId) {
         ph.group('organization', orgId)
       }
-    } else {
-      // Reset ao fazer logout
-      ph.reset()
+    } else if (userId === null) {
+      // Reset ao fazer logout (apenas se estava identificado antes)
+      if (prevUserIdRef.current) {
+        ph.reset()
+      }
     }
+
+    prevUserIdRef.current = userId ?? null
   }, [userId, orgId, ph])
 
   return null

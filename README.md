@@ -138,6 +138,50 @@ Eventos assíncronos:
 
 ---
 
+## Migrations
+
+### Estratégia por ambiente
+
+| Ambiente   | Trigger                         | Aprovação       | Comando                 |
+| ---------- | ------------------------------- | --------------- | ----------------------- |
+| Dev local  | Manual (`pnpm db:migrate`)      | Automático      | `prisma migrate dev`    |
+| Staging    | Push para `main`                | Automático      | `prisma migrate deploy` |
+| Production | Push para `main` (após staging) | Manual (GitHub) | `prisma migrate deploy` |
+
+O workflow usa dois usuários de banco distintos:
+
+- **`tenora_app`** — usuário da aplicação, sujeito ao RLS
+- **`tenora_migrator`** — usuário com `BYPASSRLS`, usado exclusivamente para migrations
+
+O shadow database (`DATABASE_SHADOW_URL`) é usado pelo Prisma em desenvolvimento para validar as migrations antes de aplicá-las ao banco principal.
+
+### Rollback de migration
+
+O Prisma não oferece rollback automático de migrations. O processo manual é:
+
+```bash
+# 1. Identificar a migration a desfazer
+pnpm db:studio     # inspecionar dados antes do rollback
+# ou
+psql $DATABASE_URL_MIGRATOR -c "SELECT migration_name, applied_steps_count, finished_at FROM \"_prisma_migrations\" ORDER BY finished_at DESC LIMIT 10;"
+
+# 2. Aplicar o SQL inverso manualmente (ex: DROP TABLE, DROP COLUMN)
+psql $DATABASE_URL_MIGRATOR -f migrations/rollback_<migration_name>.sql
+
+# 3. Remover o registro da migration do controle do Prisma
+psql $DATABASE_URL_MIGRATOR -c "DELETE FROM \"_prisma_migrations\" WHERE migration_name = '<nome>';"
+
+# 4. Deletar o arquivo de migration do repositório
+rm -rf packages/db/prisma/migrations/<nome_da_migration>/
+
+# 5. Regenerar o Prisma client
+pnpm db:generate
+```
+
+> **Boa prática:** para cada migration destrutiva (DROP, alteração de tipo), mantenha um arquivo `rollback.sql` na pasta da migration documentando o SQL inverso.
+
+---
+
 ## Contribuindo
 
 1. Crie uma branch a partir de `develop`: `git checkout -b feat/nome-da-feature`

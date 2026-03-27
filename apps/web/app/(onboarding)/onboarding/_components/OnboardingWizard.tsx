@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useOrganizationList } from '@clerk/nextjs'
+import { usePostHog } from 'posthog-js/react'
 import { StepIndicator } from '@/components/step-indicator'
 import { Step1Company } from './Step1Company'
 import { Step2Bank } from './Step2Bank'
@@ -22,6 +23,7 @@ interface CompanyData {
 
 export function OnboardingWizard() {
   const { setActive } = useOrganizationList()
+  const ph = usePostHog()
   const [isPending, startTransition] = useTransition()
 
   const [step, setStep] = useState(0)
@@ -75,6 +77,11 @@ export function OnboardingWizard() {
       if (setActive) {
         await setActive({ organization: newOrgId })
       }
+
+      ph?.capture('onboarding_completed', {
+        bank_connected: !!bankSlug,
+        n_properties: companyData.nProperties,
+      })
 
       window.location.assign('/dashboard')
     })
