@@ -53,8 +53,8 @@ async function signIn(page: Page, email: string, password: string) {
   await passwordInput.first().fill(password)
   await page.locator('button[data-localization-key="formButtonPrimary"]').click()
 
-  // Aguarda redirect pós-login (onboarding ou dashboard)
-  await page.waitForURL(/\/(onboarding|dashboard)/, { timeout: 15_000 })
+  // Aguarda redirect pós-login (onboarding, dashboard ou seleção de org)
+  await page.waitForURL(/\/(onboarding|dashboard|sign-in\/tasks)/, { timeout: 15_000 })
 }
 
 setup('autenticar usuário A', async ({ page }) => {
