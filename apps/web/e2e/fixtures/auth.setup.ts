@@ -14,13 +14,15 @@ import { AUTH_FILE_A, AUTH_FILE_B } from './auth.paths'
 
 async function signIn(page: Page, email: string, password: string) {
   await page.goto('/sign-in')
+  await page.waitForLoadState('networkidle')
 
   // Clerk renderiza o formulário de email primeiro
-  await page.getByLabel('Email address').fill(email)
+  // Usa name="identifier" que é o atributo real do input do Clerk
+  await page.locator('input[name="identifier"]').fill(email)
   await page.getByRole('button', { name: /continue/i }).click()
 
   // Após confirmar email, exibe campo de senha
-  await page.getByLabel('Password').fill(password)
+  await page.locator('input[name="password"]').fill(password)
   await page.getByRole('button', { name: /continue|sign in/i }).click()
 
   // Aguarda redirect pós-login (onboarding ou dashboard)
