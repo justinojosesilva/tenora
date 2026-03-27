@@ -196,9 +196,31 @@ model Property {
   leases           Lease[]
   maintenanceOrders MaintenanceOrder[]
 
+  documents        PropertyDocument[]
+
   @@index([tenantId])
   @@index([ownerId])
   @@map("properties")
+}
+
+// ── PropertyDocument (documentos do imóvel) ───────────────────────────────
+
+model PropertyDocument {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  propertyId  String   @map("property_id")
+  name        String
+  contentType String   @map("content_type")
+  sizeBytes   Int      @map("size_bytes")
+  storageKey  String   @map("storage_key")
+  url         String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([tenantId])
+  @@index([propertyId])
+  @@map("property_documents")
 }
 
 // ── Lease (contrato de locação) ───────────────────────────────────────────
