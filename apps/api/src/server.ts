@@ -31,7 +31,8 @@ const server = Fastify({
 // Registrar Clerk
 server.register(clerkPlugin, {
   secretKey: process.env.CLERK_SECRET_KEY,
-  publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  publishableKey:
+    process.env.CLERK_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
 })
 
 // Registrar CORS
