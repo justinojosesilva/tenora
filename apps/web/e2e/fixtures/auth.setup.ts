@@ -45,13 +45,13 @@ async function signIn(page: Page, email: string, password: string) {
   console.log('[auth.setup] Formulário de login visível, preenchendo email...')
 
   await emailInput.first().fill(email)
-  await page.getByRole('button', { name: /continue/i }).click()
+  await page.locator('button[data-localization-key="formButtonPrimary"]').click()
 
   // Após confirmar email, exibe campo de senha
   const passwordInput = page.locator('input[name="password"], input[type="password"]')
   await passwordInput.first().waitFor({ state: 'visible', timeout: 10_000 })
   await passwordInput.first().fill(password)
-  await page.getByRole('button', { name: /continue|sign in/i }).click()
+  await page.locator('button[data-localization-key="formButtonPrimary"]').click()
 
   // Aguarda redirect pós-login (onboarding ou dashboard)
   await page.waitForURL(/\/(onboarding|dashboard)/, { timeout: 15_000 })
