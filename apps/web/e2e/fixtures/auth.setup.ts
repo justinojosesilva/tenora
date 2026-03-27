@@ -13,16 +13,28 @@ import { test as setup, expect, type Page } from '@playwright/test'
 import { AUTH_FILE_A, AUTH_FILE_B } from './auth.paths'
 
 async function signIn(page: Page, email: string, password: string) {
+  await page.context().clearCookies()
   await page.goto('/sign-in')
-  await page.waitForLoadState('networkidle')
+  await page.waitForLoadState('domcontentloaded')
 
-  // Clerk renderiza o formulário de email primeiro
-  // Usa name="identifier" que é o atributo real do input do Clerk
-  await page.locator('input[name="identifier"]').fill(email)
+  // Log da URL atual para diagnóstico (visível no trace/CI logs)
+  console.log('[auth.setup] URL após goto /sign-in:', page.url())
+
+  // Aguarda o input do Clerk aparecer (componente JS carrega após hydration)
+  const emailInput = page.locator(
+    'input[name="identifier"], input[type="email"], input[autocomplete="email username"]',
+  )
+  await emailInput.first().waitFor({ state: 'visible', timeout: 20_000 })
+
+  console.log('[auth.setup] Formulário de login visível, preenchendo email...')
+
+  await emailInput.first().fill(email)
   await page.getByRole('button', { name: /continue/i }).click()
 
   // Após confirmar email, exibe campo de senha
-  await page.locator('input[name="password"]').fill(password)
+  const passwordInput = page.locator('input[name="password"], input[type="password"]')
+  await passwordInput.first().waitFor({ state: 'visible', timeout: 10_000 })
+  await passwordInput.first().fill(password)
   await page.getByRole('button', { name: /continue|sign in/i }).click()
 
   // Aguarda redirect pós-login (onboarding ou dashboard)
