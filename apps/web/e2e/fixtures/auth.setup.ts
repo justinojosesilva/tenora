@@ -20,6 +20,22 @@ async function signIn(page: Page, email: string, password: string) {
   // Log da URL atual para diagnóstico (visível no trace/CI logs)
   console.log('[auth.setup] URL após goto /sign-in:', page.url())
 
+  // Dump do HTML visível para diagnóstico
+  const bodyText = await page
+    .locator('body')
+    .innerText()
+    .catch(() => '<erro ao ler body>')
+  console.log('[auth.setup] Texto visível na página:\n', bodyText.slice(0, 1000))
+
+  // Lista todos os inputs presentes no DOM (incluindo iframes)
+  const inputs = await page.locator('input').all()
+  console.log('[auth.setup] Inputs encontrados:', inputs.length)
+  for (const input of inputs) {
+    const name = await input.getAttribute('name').catch(() => null)
+    const type = await input.getAttribute('type').catch(() => null)
+    console.log(`  input: name="${name}" type="${type}"`)
+  }
+
   // Aguarda o input do Clerk aparecer (componente JS carrega após hydration)
   const emailInput = page.locator(
     'input[name="identifier"], input[type="email"], input[autocomplete="email username"]',
