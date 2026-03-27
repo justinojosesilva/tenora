@@ -13,5 +13,15 @@ export default defineConfig({
       // Se não vier, usa o valor local para desenvolvimento
       DATABASE_URL: process.env.DATABASE_URL ?? '',
     },
+    coverage: {
+      provider: 'v8',
+      include: ['src/rls.ts', 'src/guards.ts'],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
+    },
   },
 })
