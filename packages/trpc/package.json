@@ -8,9 +8,13 @@
     "@tenora/db": "workspace:*",
     "@trpc/server": "^11.0.0"
   },
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
-    "@tenora/eslint-config": "workspace:*"
+    "@tenora/eslint-config": "workspace:*",
+    "vitest": "^4.1.0"
   },
   "type": "module",
   "exports": {
