@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import { router, protectedProcedure, type TRPCRouter } from '@tenora/trpc'
+import { router, protectedProcedure, requireRole, type TRPCRouter } from '@tenora/trpc'
 import { PropertyCreateSchema } from '@tenora/validators'
 import { TRPCError } from '@trpc/server'
+import { UserRole } from '@prisma/client'
 
 export const propertyRouter: TRPCRouter = router({
   list: protectedProcedure
@@ -34,12 +35,15 @@ export const propertyRouter: TRPCRouter = router({
       return property
     }),
 
-  create: protectedProcedure.input(PropertyCreateSchema).mutation(async ({ ctx, input }) => {
-    return ctx.db.property.create({
-      data: {
-        ...input,
-        tenantId: ctx.tenantId,
-      },
-    })
-  }),
+  create: protectedProcedure
+    .use(requireRole(UserRole.admin, UserRole.operacional, UserRole.financeiro))
+    .input(PropertyCreateSchema)
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.property.create({
+        data: {
+          ...input,
+          tenantId: ctx.tenantId,
+        },
+      })
+    }),
 })
