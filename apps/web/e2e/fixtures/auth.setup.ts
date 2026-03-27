@@ -10,10 +10,7 @@
  *   E2E_USER_B_EMAIL / E2E_USER_B_PASSWORD  — tenant B (isolamento)
  */
 import { test as setup, expect, type Page } from '@playwright/test'
-import path from 'path'
-
-export const AUTH_FILE_A = path.join(__dirname, '../../.auth/userA.json')
-export const AUTH_FILE_B = path.join(__dirname, '../../.auth/userB.json')
+import { AUTH_FILE_A, AUTH_FILE_B } from './auth.paths'
 
 async function signIn(page: Page, email: string, password: string) {
   await page.goto('/sign-in')

@@ -15,7 +15,7 @@
  *   E2E_USER_B_EMAIL / E2E_USER_B_PASSWORD
  */
 import { test, expect } from '@playwright/test'
-import { AUTH_FILE_A, AUTH_FILE_B } from '../fixtures/auth.setup'
+import { AUTH_FILE_A, AUTH_FILE_B } from '../fixtures/auth.paths'
 
 // ---------------------------------------------------------------------------
 // Testes
