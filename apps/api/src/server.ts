@@ -78,12 +78,18 @@ registerWebhooks(server)
 
 server.get('/health', async () => {
   const { db } = await import('@tenora/db')
-  const redis = new (Redis as any)({
-    host: process.env.REDIS_HOST ?? 'localhost',
-    port: Number(process.env.REDIS_PORT ?? 6379),
-    password: process.env.REDIS_PASSWORD,
-    lazyConnect: true,
-  })
+  const redisUrl = process.env.REDIS_URL
+  const redisOpts = redisUrl
+    ? (() => {
+        const { hostname, port, password } = new URL(redisUrl)
+        return { host: hostname, port: Number(port) || 6379, password: password || undefined }
+      })()
+    : {
+        host: process.env.REDIS_HOST ?? 'localhost',
+        port: Number(process.env.REDIS_PORT ?? 6379),
+        password: process.env.REDIS_PASSWORD,
+      }
+  const redis = new (Redis as any)({ ...redisOpts, lazyConnect: true })
 
   let dbStatus = 'disconnected'
   let redisStatus = 'disconnected'
