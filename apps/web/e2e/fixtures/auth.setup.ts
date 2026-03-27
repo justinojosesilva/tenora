@@ -55,6 +55,16 @@ async function signIn(page: Page, email: string, password: string) {
 
   // Aguarda redirect pós-login (onboarding, dashboard ou seleção de org)
   await page.waitForURL(/\/(onboarding|dashboard|sign-in\/tasks)/, { timeout: 15_000 })
+
+  // Se redirecionado para choose-organization, seleciona a primeira org disponível
+  if (page.url().includes('sign-in/tasks')) {
+    console.log('[auth.setup] Tela de seleção de org detectada, selecionando...')
+    // Clerk exibe botões clicáveis para cada organização
+    await page.locator('button').first().waitFor({ state: 'visible', timeout: 10_000 })
+    await page.locator('button').first().click()
+    await page.waitForURL(/\/(onboarding|dashboard)/, { timeout: 15_000 })
+    console.log('[auth.setup] Org selecionada, URL final:', page.url())
+  }
 }
 
 setup('autenticar usuário A', async ({ page }) => {
