@@ -4,11 +4,23 @@ import { Queue, type ConnectionOptions } from 'bullmq'
 // Conexão Redis (compartilhada entre filas)
 // ---------------------------------------------------------------------------
 
-export const redisConnection: ConnectionOptions = {
-  host: process.env.REDIS_HOST ?? 'localhost',
-  port: Number(process.env.REDIS_PORT ?? 6379),
-  password: process.env.REDIS_PASSWORD || undefined,
+function buildRedisConnection(): ConnectionOptions {
+  if (process.env.REDIS_URL) {
+    const { hostname, port, password } = new URL(process.env.REDIS_URL)
+    return {
+      host: hostname,
+      port: Number(port) || 6379,
+      password: password || undefined,
+    }
+  }
+  return {
+    host: process.env.REDIS_HOST ?? 'localhost',
+    port: Number(process.env.REDIS_PORT ?? 6379),
+    password: process.env.REDIS_PASSWORD || undefined,
+  }
 }
+
+export const redisConnection: ConnectionOptions = buildRedisConnection()
 
 // ---------------------------------------------------------------------------
 // Nomes das filas
