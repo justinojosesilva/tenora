@@ -9,7 +9,7 @@ export const PropertyCreateSchema = z.object({
   area: z.number().positive().optional(),
   adminFeePct: z.number().min(0).max(100).default(10),
   rentAmount: z.number().positive().optional(),
-  ownerId: z.string().uuid(),
+  ownerId: z.string().uuid().optional(),
 })
 
 export const PropertyUpdateSchema = PropertyCreateSchema.partial()

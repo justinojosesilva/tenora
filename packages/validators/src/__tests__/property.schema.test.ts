@@ -69,6 +69,14 @@ describe('PropertyCreateSchema', () => {
     expect(over.success).toBe(false)
   })
 
+  it('aceita payload sem ownerId (ownerId nullable)', () => {
+    const result = PropertyCreateSchema.safeParse({
+      address: 'Rua das Flores, 123',
+      type: 'residential',
+    })
+    expect(result.success).toBe(true)
+  })
+
   it('rejeita area negativa', () => {
     const result = PropertyCreateSchema.safeParse({
       address: 'Rua A, 1',

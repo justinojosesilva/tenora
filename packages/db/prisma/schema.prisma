@@ -176,7 +176,7 @@ model OwnerAccount {
 model Property {
   id          String         @id @default(uuid())
   tenantId    String         @map("tenant_id")
-  ownerId     String         @map("owner_id")
+  ownerId     String?        @map("owner_id")
   code        String?
   address     String
   city        String?
@@ -192,7 +192,7 @@ model Property {
   deletedAt   DateTime?      @map("deleted_at")
 
   tenant           Tenant             @relation(fields: [tenantId], references: [id])
-  owner            Owner              @relation(fields: [ownerId], references: [id])
+  owner            Owner?             @relation(fields: [ownerId], references: [id])
   leases           Lease[]
   maintenanceOrders MaintenanceOrder[]
 

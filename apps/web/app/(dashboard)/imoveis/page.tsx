@@ -1,14 +1,10 @@
 import { Suspense } from 'react'
-import Link from 'next/link'
 import { auth } from '@clerk/nextjs/server'
 import { prismaWithTenant } from '@tenora/db'
 import type { PropertyStatus, PropertyType } from '@tenora/db'
-import { Building2, Plus } from 'lucide-react'
-import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { PropertyCard } from '@/components/property/property-card'
 import { PropertyFilters } from '@/components/property/property-filters'
 import { PropertyListSkeleton } from '@/components/property/property-list-skeleton'
+import { PropertyPageClient } from '@/components/property/property-page-client'
 
 export const metadata = { title: 'Imóveis — Tenora' }
 
@@ -21,14 +17,19 @@ type SearchParams = {
 
 const PAGE_SIZE = 20
 
-async function PropertyList({
+const EDIT_ROLES = new Set(['admin', 'operacional', 'financeiro'])
+const DELETE_ROLES = new Set(['admin', 'operacional'])
+
+async function PropertySection({
   orgId,
+  orgRole,
   search,
   status,
   type,
   page,
 }: {
   orgId: string
+  orgRole: string | null | undefined
   search?: string
   status?: PropertyStatus
   type?: PropertyType
@@ -40,12 +41,10 @@ async function PropertyList({
     deletedAt: null,
     ...(status && { status }),
     ...(type && { type }),
-    ...(search && {
-      address: { contains: search, mode: 'insensitive' as const },
-    }),
+    ...(search && { address: { contains: search, mode: 'insensitive' as const } }),
   }
 
-  const [properties, total] = await Promise.all([
+  const [properties, owners, total] = await Promise.all([
     db.property.findMany({
       where,
       include: { owner: { select: { name: true } } },
@@ -53,45 +52,39 @@ async function PropertyList({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
+    db.owner.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
     db.property.count({ where }),
   ])
 
-  if (properties.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-        <Building2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium text-muted-foreground">Nenhum imóvel encontrado</p>
-        <p className="text-xs text-muted-foreground/70 mt-1">
-          {search || status || type
-            ? 'Tente ajustar os filtros'
-            : 'Cadastre o primeiro imóvel para começar'}
-        </p>
-      </div>
-    )
-  }
+  const role = orgRole ?? ''
+  const canEdit = EDIT_ROLES.has(role)
+  const canDelete = DELETE_ROLES.has(role)
 
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  // Serialize dates for client component
+  const serialized = properties.map((p) => ({
+    ...p,
+    area: p.area?.toString() ?? null,
+    rentAmount: p.rentAmount?.toString() ?? null,
+    adminFeePct: p.adminFeePct.toString(),
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+    deletedAt: p.deletedAt?.toISOString() ?? null,
+  }))
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        {total} {total === 1 ? 'imóvel' : 'imóveis'}
-      </p>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {properties.map((property) => (
-          <PropertyCard key={property.id} property={property} />
-        ))}
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2 pt-2">
-          <span className="text-sm text-muted-foreground">
-            Página {page} de {totalPages}
-          </span>
-        </div>
-      )}
-    </div>
+    <PropertyPageClient
+      properties={serialized}
+      owners={owners}
+      canEdit={canEdit}
+      canDelete={canDelete}
+      total={total}
+      page={page}
+      totalPages={Math.ceil(total / PAGE_SIZE)}
+    />
   )
 }
 
@@ -100,7 +93,7 @@ export default async function ImoveisPage({
 }: {
   searchParams: Promise<SearchParams>
 }) {
-  const { orgId } = await auth()
+  const { orgId, sessionClaims } = await auth()
   const params = await searchParams
 
   if (!orgId) return null
@@ -108,30 +101,20 @@ export default async function ImoveisPage({
   const page = Math.max(1, Number(params.page ?? 1))
   const status = params.status as PropertyStatus | undefined
   const type = params.type as PropertyType | undefined
+  const orgRole = (sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
+    | string
+    | undefined
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Imóveis</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gerencie o portfólio de imóveis</p>
-        </div>
-        <Link
-          href="/imoveis/novo"
-          className={cn(buttonVariants({ size: 'sm' }), 'inline-flex items-center')}
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Novo Imóvel
-        </Link>
-      </div>
-
+    <div className="mx-auto max-w-6xl space-y-6 px-6 py-8">
       <Suspense fallback={null}>
         <PropertyFilters />
       </Suspense>
 
       <Suspense fallback={<PropertyListSkeleton />}>
-        <PropertyList
+        <PropertySection
           orgId={orgId}
+          orgRole={orgRole}
           search={params.search}
           status={status}
           type={type}

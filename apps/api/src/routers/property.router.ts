@@ -58,6 +58,14 @@ export const propertyRouter: TRPCRouter = router({
       if (!existing)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada!' })
 
+      if (input.data.ownerId) {
+        const owner = await ctx.db.owner.findUnique({
+          where: { id: input.data.ownerId, deletedAt: null },
+        })
+        if (!owner)
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Proprietário não encontrado!' })
+      }
+
       return ctx.db.property.update({
         where: { id: input.id },
         data: input.data,

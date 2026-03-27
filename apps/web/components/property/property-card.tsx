@@ -32,7 +32,7 @@ type PropertyCardProps = {
     status: PropertyStatus
     rentAmount: { toString(): string } | null
     adminFeePct: { toString(): string }
-    owner: { name: string }
+    owner: { name: string } | null
   }
 }
 
@@ -79,7 +79,7 @@ export function PropertyCard({ property }: PropertyCardProps) {
       <div className="border-t pt-3 flex items-center justify-between text-sm">
         <div className="flex items-center gap-1.5 text-muted-foreground truncate">
           <User className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{property.owner.name}</span>
+          <span className="truncate">{property.owner?.name ?? 'Sem proprietário'}</span>
         </div>
         {rentFormatted && (
           <span className="font-semibold text-foreground whitespace-nowrap">{rentFormatted}</span>
