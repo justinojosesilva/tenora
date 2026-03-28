@@ -15,7 +15,6 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   X,
   LogOut,
 } from 'lucide-react'
