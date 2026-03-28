@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "allowedOrigins": [
+        "https://tenora-web-git-develop-justino-joses-projects.vercel.app",
+        "https://tenora-web-kappa.vercel.app",
+        "https://tenora-web-git-staging-justino-joses-projects.vercel.app"
+      ],
+      "allowedMethods": ["PUT"],
+      "allowedHeaders": ["Content-Type"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}

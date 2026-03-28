@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { Search, Bell, CalendarDays } from 'lucide-react'
+import { Search, Bell, CalendarDays, Menu } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -15,7 +15,11 @@ const PERIODS = [
 
 export type Period = (typeof PERIODS)[number]['value']
 
-export function AppTopbar() {
+export interface AppTopbarProps {
+  onMobileMenuToggle?: () => void
+}
+
+export function AppTopbar({ onMobileMenuToggle }: AppTopbarProps = {}) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -31,7 +35,18 @@ export function AppTopbar() {
   )
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background px-6">
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background px-4 lg:px-6">
+      {/* Mobile hamburger */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 lg:hidden"
+        onClick={onMobileMenuToggle}
+      >
+        <Menu className="h-5 w-5" />
+        <span className="sr-only">Abrir menu</span>
+      </Button>
+
       {/* Search */}
       <div className="relative w-full max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

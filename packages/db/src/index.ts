@@ -1,4 +1,25 @@
-export { prismaWithTenant, db } from './rls.js'
-export { safeDb } from './guards.js'
-export type { TenantDB } from './rls.js'
-export * from '@prisma/client'
+export { prismaWithTenant, withTenantRLS, db } from './rls'
+export { safeDb } from './guards'
+export type { TenantDB } from './rls'
+export type {
+  PropertyStatus,
+  PropertyType,
+  // ownerId is intentionally omitted from Lease — the owner is accessible via
+  // property.owner. Adding it here would be denormalization requiring an extra
+  // migration with no query-performance benefit given current access patterns.
+  LeaseStatus,
+  BillingStatus,
+  BillingType,
+  Prisma,
+  Property,
+  Owner,
+  Lease,
+  BillingCharge,
+  Transaction,
+  MaintenanceOrder,
+  OwnerAccount,
+  Tenant,
+  User,
+  BankConnection,
+  BankAccount,
+} from '@prisma/client'

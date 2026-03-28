@@ -1,6 +1,7 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest'
 import { TenantStatus, TenantPlan, UserRole, PropertyType, PropertyStatus } from '@prisma/client'
 import { db, prismaWithTenant } from '../rls'
+import { safeDb } from '../guards'
 
 interface TestFixture {
   tenantA: { id: string; name: string }
@@ -243,5 +244,23 @@ describe('RLS — isolamento de tenant', () => {
     })
     expect(verifyProperty).toBeDefined()
     expect(verifyProperty?.id).toBe(fixture.propertyB.id)
+  })
+
+  it('findUnique com ID de outro tenant retorna null, não erro', async () => {
+    const rls = prismaWithTenant(fixture.tenantA.id)
+
+    // Tenant A tries to find property B by ID — RLS filters it out, returns null
+    const result = await rls.property.findUnique({
+      where: { id: fixture.propertyB.id },
+    })
+
+    expect(result).toBeNull()
+  })
+
+  it('safeDb sem tenant lança erro antes de chegar ao banco', () => {
+    expect(() => {
+      // Accessing any model directly on safeDb (without tenant) should throw
+      const _ = safeDb.property
+    }).toThrow(/Acesso direto ao model "property" sem tenant bloqueado/)
   })
 })

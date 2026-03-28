@@ -3,9 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
-  directUrl  = env("DATABASE_URL_MIGRATOR")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DATABASE_URL_MIGRATOR")
+  shadowDatabaseUrl = env("DATABASE_SHADOW_URL")
 }
 
 // ── Enums ──────────────────────────────────────────────────────────────────
@@ -176,7 +177,7 @@ model OwnerAccount {
 model Property {
   id          String         @id @default(uuid())
   tenantId    String         @map("tenant_id")
-  ownerId     String         @map("owner_id")
+  ownerId     String?        @map("owner_id")
   code        String?
   address     String
   city        String?
@@ -192,13 +193,35 @@ model Property {
   deletedAt   DateTime?      @map("deleted_at")
 
   tenant           Tenant             @relation(fields: [tenantId], references: [id])
-  owner            Owner              @relation(fields: [ownerId], references: [id])
+  owner            Owner?             @relation(fields: [ownerId], references: [id])
   leases           Lease[]
   maintenanceOrders MaintenanceOrder[]
+
+  documents        PropertyDocument[]
 
   @@index([tenantId])
   @@index([ownerId])
   @@map("properties")
+}
+
+// ── PropertyDocument (documentos do imóvel) ───────────────────────────────
+
+model PropertyDocument {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  propertyId  String   @map("property_id")
+  name        String
+  contentType String   @map("content_type")
+  sizeBytes   Int      @map("size_bytes")
+  storageKey  String   @map("storage_key")
+  url         String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([tenantId])
+  @@index([propertyId])
+  @@map("property_documents")
 }
 
 // ── Lease (contrato de locação) ───────────────────────────────────────────

@@ -11,6 +11,91 @@ concurrency:
   cancel-in-progress: true # cancela runs antigas do mesmo PR
 
 jobs:
+  test:
+    name: Testes de integração (RLS + banco)
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:15
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tenora_test
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://tenora_app:tenora123@localhost:5432/tenora_test
+      DATABASE_URL_MIGRATOR: postgresql://tenora_migrator:migrator123@localhost:5432/tenora_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          run_install: false
+
+      - name: Obter caminho do cache pnpm
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup roles do banco
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/tenora_test <<'SQL'
+            CREATE ROLE tenora_migrator LOGIN PASSWORD 'migrator123' NOSUPERUSER NOBYPASSRLS;
+            CREATE ROLE tenora_app     LOGIN PASSWORD 'tenora123'   NOSUPERUSER NOBYPASSRLS NOINHERIT;
+            GRANT ALL PRIVILEGES ON DATABASE tenora_test TO tenora_migrator;
+            GRANT ALL ON SCHEMA public TO tenora_migrator;
+            GRANT CONNECT ON DATABASE tenora_test TO tenora_app;
+            GRANT USAGE ON SCHEMA public TO tenora_app;
+          SQL
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @tenora/db exec prisma generate
+
+      - name: Run migrations
+        run: pnpm --filter @tenora/db exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL_MIGRATOR }}
+
+      - name: Conceder permissões ao app user
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/tenora_test <<'SQL'
+            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tenora_app;
+            GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tenora_app;
+          SQL
+
+      - name: Run tests
+        run: pnpm --filter @tenora/db test
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          DATABASE_URL_MIGRATOR: ${{ env.DATABASE_URL_MIGRATOR }}
   ci:
     name: Lint, type-check, test e build
     runs-on: ubuntu-latest
@@ -71,13 +156,15 @@ jobs:
       - name: Type-check
         run: pnpm type-check
 
-      # 9. Testes
+      # 9. Testes (db é testado no job dedicado com Postgres)
       - name: Testes
-        run: pnpm test
+        run: pnpm turbo test --filter=!@tenora/db
 
       # 10. Build
       - name: Build
         run: pnpm build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dGVzdC5jbGVyay5hY2NvdW50cyQ=
 
   e2e:
     name: Testes E2E (smoke)
@@ -87,8 +174,7 @@ jobs:
 
     # Roda apenas quando as secrets de staging estiverem configuradas
     if: |
-      vars.E2E_BASE_URL != '' &&
-      secrets.E2E_USER_A_EMAIL != ''
+      vars.E2E_BASE_URL != ''
 
     steps:
       - name: Checkout

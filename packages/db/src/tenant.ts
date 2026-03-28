@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
-import { withTenantRLS } from './rls.js'
+import { withTenantRLS } from './rls'
 
 export function tenantDb(tenantId: string) {
   if (!tenantId) {

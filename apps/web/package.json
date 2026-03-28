@@ -18,6 +18,7 @@
     "@clerk/nextjs": "^6.0.0",
     "@sentry/nextjs": "^10.46.0",
     "@tailwindcss/postcss": "^4.2.2",
+    "@tenora/db": "workspace:*",
     "@tenora/trpc": "workspace:*",
     "@tenora/validators": "workspace:*",
     "class-variance-authority": "^0.7.1",

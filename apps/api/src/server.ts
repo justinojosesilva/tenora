@@ -6,11 +6,15 @@ import Fastify from 'fastify'
 import { clerkPlugin, getAuth } from '@clerk/fastify'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
+import { createBullBoard } from '@bull-board/api'
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
+import { FastifyAdapter } from '@bull-board/fastify'
 import { appRouter } from './routers/_app.router.js'
 import { createContext } from '@tenora/trpc'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import { startWorkers } from './jobs/index.js'
 import { registerWebhooks } from './webhooks/index.js'
+import { queues } from '@tenora/queues'
 import Redis from 'ioredis'
 
 const server = Fastify({
@@ -31,7 +35,8 @@ const server = Fastify({
 // Registrar Clerk
 server.register(clerkPlugin, {
   secretKey: process.env.CLERK_SECRET_KEY,
-  publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  publishableKey:
+    process.env.CLERK_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
 })
 
 // Registrar CORS
@@ -75,14 +80,43 @@ await server.register(fastifyTRPCPlugin, {
 
 registerWebhooks(server)
 
+// Bull Board — /admin/queues (somente role admin)
+const bullBoardAdapter = new FastifyAdapter()
+bullBoardAdapter.setBasePath('/admin/queues')
+createBullBoard({
+  queues: queues.map((q) => new BullMQAdapter(q)),
+  serverAdapter: bullBoardAdapter,
+})
+server.register(async (instance) => {
+  instance.addHook('preHandler', async (request, reply) => {
+    const auth = getAuth(request)
+    if (!auth?.userId || !auth?.orgId) {
+      return reply.code(401).send({ error: 'Não autenticado' })
+    }
+    const role = (auth.sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
+      | string
+      | undefined
+    if (role !== 'admin') {
+      return reply.code(403).send({ error: 'Acesso negado' })
+    }
+  })
+  await instance.register(bullBoardAdapter.registerPlugin(), { prefix: '/admin/queues' })
+})
+
 server.get('/health', async () => {
   const { db } = await import('@tenora/db')
-  const redis = new (Redis as any)({
-    host: process.env.REDIS_HOST ?? 'localhost',
-    port: Number(process.env.REDIS_PORT ?? 6379),
-    password: process.env.REDIS_PASSWORD,
-    lazyConnect: true,
-  })
+  const redisUrl = process.env.REDIS_URL
+  const redisOpts = redisUrl
+    ? (() => {
+        const { hostname, port, password } = new URL(redisUrl)
+        return { host: hostname, port: Number(port) || 6379, password: password || undefined }
+      })()
+    : {
+        host: process.env.REDIS_HOST ?? 'localhost',
+        port: Number(process.env.REDIS_PORT ?? 6379),
+        password: process.env.REDIS_PASSWORD,
+      }
+  const redis = new (Redis as any)({ ...redisOpts, lazyConnect: true })
 
   let dbStatus = 'disconnected'
   let redisStatus = 'disconnected'

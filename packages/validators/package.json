@@ -13,7 +13,11 @@
   "dependencies": {
     "zod": "^3.0.0"
   },
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
   "devDependencies": {
-    "@tenora/eslint-config": "workspace:*"
+    "@tenora/eslint-config": "workspace:*",
+    "vitest": "^4.1.0"
   }
 }

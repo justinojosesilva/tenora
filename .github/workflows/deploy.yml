@@ -50,6 +50,15 @@ jobs:
           DATABASE_URL_MIGRATOR: ${{ secrets.STAGING_DATABASE_URL_MIGRATOR }}
         run: pnpm --filter @tenora/db exec prisma migrate deploy
 
+      # Deploy api → Render
+      - name: Deploy api → Render staging
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}'
+
   # ── Production: requires manual approval via GitHub Environment ──────────
   migrate-prod:
     name: Migrate (production)
@@ -91,3 +100,12 @@ jobs:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           DATABASE_URL_MIGRATOR: ${{ secrets.PROD_DATABASE_URL_MIGRATOR }}
         run: pnpm --filter @tenora/db exec prisma migrate deploy
+
+      # Deploy api → Render
+      - name: Deploy api → Render staging
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}'
