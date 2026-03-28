@@ -12,7 +12,7 @@ import {
   TransactionStatus,
   MaintenanceStatus,
 } from '@prisma/client'
-import { db, prismaWithTenant } from './rls.js'
+import { db, prismaWithTenant } from './rls'
 
 // ---------------------------------------------------------------------------
 // Seed idempotente: rodar duas vezes não cria duplicatas.

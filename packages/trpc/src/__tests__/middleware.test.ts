@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { TRPCError } from '@trpc/server'
 import { UserRole } from '@prisma/client'
-import { requireRole, isAuthed } from '../middleware.js'
-import { t } from '../base.js'
-import type { Context } from '../context.js'
+import { requireRole, isAuthed } from '../middleware'
+import { t } from '../base'
+import type { Context } from '../context'
 
 // ── Test router ────────────────────────────────────────────────────────────────
 

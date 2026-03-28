@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import type { UserRole } from '@prisma/client'
-import { t } from './base.js'
+import { t } from './base'
 
 /**
  * Matriz de permissões por módulo

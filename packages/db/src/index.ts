@@ -1,4 +1,19 @@
-export { prismaWithTenant, db } from './rls.js'
-export { safeDb } from './guards.js'
-export type { TenantDB } from './rls.js'
-export * from '@prisma/client'
+export { prismaWithTenant, db } from './rls'
+export { safeDb } from './guards'
+export type { TenantDB } from './rls'
+export type {
+  PropertyStatus,
+  PropertyType,
+  Prisma,
+  Property,
+  Owner,
+  Lease,
+  BillingCharge,
+  Transaction,
+  MaintenanceOrder,
+  OwnerAccount,
+  Tenant,
+  User,
+  BankConnection,
+  BankAccount,
+} from '@prisma/client'

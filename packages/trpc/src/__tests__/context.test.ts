@@ -20,7 +20,7 @@ vi.mock('@tenora/db', () => ({
 }))
 
 // Import after mocks are set up
-const { createContext } = await import('../context.js')
+const { createContext } = await import('../context')
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
