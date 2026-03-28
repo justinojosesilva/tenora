@@ -43,7 +43,25 @@ async function OwnerSection({
         ownerAccount: { select: { balance: true } },
         properties: {
           where: { deletedAt: null },
-          select: { id: true, address: true, city: true, status: true, rentAmount: true },
+          select: {
+            id: true,
+            address: true,
+            city: true,
+            state: true,
+            zipCode: true,
+            type: true,
+            status: true,
+            area: true,
+            rentAmount: true,
+            adminFeePct: true,
+            ownerId: true,
+            createdAt: true,
+            updatedAt: true,
+            leases: {
+              where: { deletedAt: null, status: { in: ['active', 'renewing'] } },
+              select: { id: true },
+            },
+          },
         },
       },
       orderBy: { name: 'asc' },
@@ -69,8 +87,17 @@ async function OwnerSection({
       id: p.id,
       address: p.address,
       city: p.city,
+      state: p.state,
+      zipCode: p.zipCode,
+      type: p.type,
       status: p.status,
+      area: p.area?.toString() ?? null,
       rentAmount: p.rentAmount?.toString() ?? null,
+      adminFeePct: p.adminFeePct.toString(),
+      ownerId: p.ownerId,
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+      activeLeaseCount: p.leases.length,
     })),
   }))
 
@@ -91,15 +118,17 @@ export default async function ProprietariosPage({
 }: {
   searchParams: Promise<SearchParams>
 }) {
-  const { orgId, sessionClaims } = await auth()
+  const { orgId, sessionClaims, orgRole } = await auth()
   const params = await searchParams
 
   if (!orgId) return null
 
   const page = Math.max(1, Number(params.page ?? 1))
-  const orgRole = (sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
-    | string
-    | undefined
+
+  const resolvedRole =
+    ((sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
+      | string
+      | undefined) ?? orgRole?.replace(/^org:/, '')
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-6 py-8">
@@ -108,7 +137,7 @@ export default async function ProprietariosPage({
       </Suspense>
 
       <Suspense fallback={<OwnerTableSkeleton />}>
-        <OwnerSection orgId={orgId} orgRole={orgRole} search={params.search} page={page} />
+        <OwnerSection orgId={orgId} orgRole={resolvedRole} search={params.search} page={page} />
       </Suspense>
     </div>
   )

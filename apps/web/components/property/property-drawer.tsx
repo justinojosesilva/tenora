@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Building2, FileText, History, Trash2 } from 'lucide-react'
 import { Sheet } from '@/components/ui/sheet'
 import { Tabs } from '@/components/ui/tabs'
@@ -27,6 +28,7 @@ type Props = {
 }
 
 export function PropertyDrawer({ open, onClose, property, owners, canEdit, canDelete }: Props) {
+  const router = useRouter()
   const [toast, setToast] = useState<Toast | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -48,6 +50,7 @@ export function PropertyDrawer({ open, onClose, property, owners, canEdit, canDe
       type: 'success',
     })
     onClose()
+    router.refresh()
   }
 
   const handleDelete = () => {
@@ -59,6 +62,7 @@ export function PropertyDrawer({ open, onClose, property, owners, canEdit, canDe
       } else {
         setToast({ message: 'Imóvel excluído com sucesso!', type: 'success' })
         onClose()
+        router.refresh()
       }
       setConfirmDelete(false)
     })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Building2, FileText, Trash2, User } from 'lucide-react'
 import { Sheet } from '@/components/ui/sheet'
 import { Tabs } from '@/components/ui/tabs'
@@ -8,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { OwnerForm, type FormOwnerData } from './owner-form'
 import { deleteOwnerAction } from '@/app/(dashboard)/proprietarios/actions'
+import { PropertyDrawer, type DrawerProperty } from '@/components/property/property-drawer'
 
 const statusLabel: Record<string, string> = {
   available: 'Disponível',
@@ -19,6 +21,11 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'o
   rented: 'secondary',
   maintenance: 'destructive',
 }
+const typeLabel: Record<string, string> = {
+  residential: 'Residencial',
+  commercial: 'Comercial',
+  mixed: 'Misto',
+}
 
 export type DrawerOwner = FormOwnerData & {
   balance: string
@@ -27,8 +34,17 @@ export type DrawerOwner = FormOwnerData & {
     id: string
     address: string
     city: string | null
+    state: string | null
+    zipCode: string | null
+    type: string
     status: string
+    area: string | null
     rentAmount: string | null
+    adminFeePct: string
+    ownerId: string | null
+    createdAt: string
+    updatedAt: string
+    activeLeaseCount: number
   }>
 }
 
@@ -43,9 +59,32 @@ type Props = {
 }
 
 export function OwnerDrawer({ open, onClose, owner, canEdit, canDelete }: Props) {
+  const router = useRouter()
   const [toast, setToast] = useState<Toast | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [propertyDrawerOpen, setPropertyDrawerOpen] = useState(false)
+  const [selectedProperty, setSelectedProperty] = useState<DrawerProperty | null>(null)
+
+  const handlePropertyClick = (p: DrawerOwner['properties'][0]) => {
+    setSelectedProperty({
+      id: p.id,
+      address: p.address,
+      city: p.city,
+      state: p.state,
+      zipCode: p.zipCode,
+      type: p.type,
+      status: p.status,
+      area: p.area,
+      rentAmount: p.rentAmount,
+      adminFeePct: p.adminFeePct,
+      ownerId: p.ownerId,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      ownerName: owner?.name ?? null,
+    })
+    setPropertyDrawerOpen(true)
+  }
 
   useEffect(() => {
     if (!toast) return
@@ -101,6 +140,11 @@ export function OwnerDrawer({ open, onClose, owner, canEdit, canDelete }: Props)
                 {owner && (
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{owner.cpfCnpj}</p>
                 )}
+                {owner && balanceNum > 0 && (
+                  <p className="mt-0.5 truncate text-xs font-medium text-green-600">
+                    Saldo: {balanceFormatted}
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {owner && canDelete && (
@@ -148,21 +192,40 @@ export function OwnerDrawer({ open, onClose, owner, canEdit, canDelete }: Props)
                     {owner.properties.map((p) => (
                       <div
                         key={p.id}
-                        className="flex items-start justify-between rounded-lg border p-3"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handlePropertyClick(p)}
+                        onKeyDown={(e) => e.key === 'Enter' && handlePropertyClick(p)}
+                        className="flex cursor-pointer items-start justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
                       >
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{p.address}</p>
-                          {p.city && <p className="text-xs text-muted-foreground">{p.city}</p>}
-                          {p.rentAmount && (
-                            <p className="mt-1 text-xs font-medium text-foreground">
-                              {parseFloat(p.rentAmount).toLocaleString('pt-BR', {
-                                style: 'currency',
-                                currency: 'BRL',
-                              })}
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {[typeLabel[p.type] ?? p.type, p.city].filter(Boolean).join(' · ')}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {p.rentAmount && (
+                              <span className="text-xs font-medium text-foreground">
+                                {parseFloat(p.rentAmount).toLocaleString('pt-BR', {
+                                  style: 'currency',
+                                  currency: 'BRL',
+                                })}
+                              </span>
+                            )}
+                            {p.activeLeaseCount > 0 && (
+                              <Badge
+                                variant="outline"
+                                className="border-green-500 text-[10px] text-green-600"
+                              >
+                                Contrato ativo
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                        <Badge variant={statusVariant[p.status] ?? 'outline'} className="shrink-0">
+                        <Badge
+                          variant={statusVariant[p.status] ?? 'outline'}
+                          className="ml-2 shrink-0"
+                        >
                           {statusLabel[p.status] ?? p.status}
                         </Badge>
                       </div>
@@ -230,6 +293,19 @@ export function OwnerDrawer({ open, onClose, owner, canEdit, canDelete }: Props)
           </div>
         </div>
       )}
+
+      {/* Property drawer — aberto ao clicar em um imóvel */}
+      <PropertyDrawer
+        open={propertyDrawerOpen}
+        onClose={() => {
+          setPropertyDrawerOpen(false)
+          router.refresh()
+        }}
+        property={selectedProperty}
+        owners={owner ? [{ id: owner.id, name: owner.name }] : []}
+        canEdit={canEdit}
+        canDelete={canDelete}
+      />
 
       {/* Toast */}
       {toast && (

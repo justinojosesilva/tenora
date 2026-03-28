@@ -6,6 +6,7 @@ export const PropertyCreateSchema = z.object({
   state: z.string().optional(),
   zipCode: z.string().optional(),
   type: z.enum(['residential', 'commercial', 'mixed']),
+  status: z.enum(['available', 'rented', 'maintenance']).optional(),
   area: z.number().positive().optional(),
   adminFeePct: z.number().min(0).max(100).default(10),
   rentAmount: z.number().positive().optional(),

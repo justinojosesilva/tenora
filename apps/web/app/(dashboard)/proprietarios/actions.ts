@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { auth } from '@clerk/nextjs/server'
-import { prismaWithTenant } from '@tenora/db'
+import { prismaWithTenant, withTenantRLS } from '@tenora/db'
 import { OwnerCreateSchema, OwnerUpdateSchema } from '@tenora/validators'
 
 export type OwnerFormState = {
@@ -39,7 +39,7 @@ export async function createOwnerAction(
   })
   if (existing) return { error: 'Já existe um proprietário com este CPF/CNPJ' }
 
-  const created = await db.$transaction(async (tx) => {
+  const created = await withTenantRLS(orgId, async (tx) => {
     const owner = await tx.owner.create({ data: { ...parsed.data, tenantId: orgId } })
     await tx.ownerAccount.create({ data: { tenantId: orgId, ownerId: owner.id, balance: 0 } })
     return owner
@@ -92,12 +92,13 @@ export async function updateOwnerAction(
 export async function deleteOwnerAction(
   id: string,
 ): Promise<{ error?: string; success?: boolean }> {
-  const { orgId, sessionClaims } = await auth()
+  const { orgId, sessionClaims, orgRole } = await auth()
   if (!orgId) return { error: 'Não autenticado' }
 
-  const role = (sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
-    | string
-    | undefined
+  const role =
+    ((sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
+      | string
+      | undefined) ?? orgRole?.replace(/^org:/, '')
   if (role !== 'admin' && role !== 'operacional') {
     return { error: 'Sem permissão para excluir proprietários' }
   }

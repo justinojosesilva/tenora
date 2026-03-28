@@ -71,7 +71,14 @@ export const documentRouter: TRPCRouter = router({
         { expiresIn: UPLOAD_URL_EXPIRY_SECONDS },
       )
 
-      const publicUrl = `${process.env.R2_PUBLIC_URL}/${storageKey}`
+      const r2PublicUrl = process.env.R2_PUBLIC_URL
+      if (!r2PublicUrl) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'URL pública do armazenamento não configurada',
+        })
+      }
+      const publicUrl = `${r2PublicUrl}/${storageKey}`
 
       const document = await ctx.db.propertyDocument.create({
         data: {

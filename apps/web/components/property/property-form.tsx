@@ -22,6 +22,7 @@ export type FormProperty = {
   state: string | null
   zipCode: string | null
   type: string
+  status: string
   area: string | null
   rentAmount: string | null
   adminFeePct: string
@@ -214,6 +215,22 @@ export function PropertyForm({ property, owners, canEdit, onSuccess }: Props) {
             disabled={fieldDisabled}
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="pf-status">Status</Label>
+        <select
+          id="pf-status"
+          name="status"
+          defaultValue={property?.status ?? 'available'}
+          disabled={fieldDisabled}
+          className={selectCls}
+        >
+          <option value="available">Disponível</option>
+          <option value="rented">Alugado</option>
+          <option value="maintenance">Manutenção</option>
+        </select>
+        {err('status') && <p className="text-xs text-destructive">{err('status')}</p>}
       </div>
 
       <div className="grid grid-cols-2 gap-3">

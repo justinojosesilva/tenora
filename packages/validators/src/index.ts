@@ -1,3 +1,4 @@
 export * from './property.schema'
 export * from './user.schema'
 export * from './owner.schema'
+export * from './lease.schema'

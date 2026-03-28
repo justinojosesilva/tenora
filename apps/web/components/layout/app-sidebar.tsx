@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useClerk } from '@clerk/nextjs'
 import {
   LayoutDashboard,
   Wallet,
@@ -16,6 +17,7 @@ import {
   PanelLeftOpen,
   Plus,
   X,
+  LogOut,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -66,7 +68,9 @@ export function AppSidebar({
   onMobileClose,
 }: AppSidebarProps) {
   const pathname = usePathname()
+  const { signOut } = useClerk()
   const [collapsed, setCollapsed] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
@@ -180,7 +184,7 @@ export function AppSidebar({
         </div>
 
         {/* CTA — Novo Lançamento */}
-        <div className={cn('px-2 pb-3', !isOverlay && collapsed && 'flex justify-center')}>
+        {/*<div className={cn('px-2 pb-3', !isOverlay && collapsed && 'flex justify-center')}>
           {!isOverlay && collapsed ? (
             <Tooltip>
               <TooltipTrigger>
@@ -202,27 +206,47 @@ export function AppSidebar({
               Novo Lançamento
             </Button>
           )}
-        </div>
+        </div>*/}
 
         {/* User footer */}
-        <div
-          className={cn(
-            'flex items-center border-t border-sidebar-border p-3',
-            !isOverlay && collapsed ? 'justify-center' : 'gap-3',
+        <div className="relative border-t border-sidebar-border">
+          {userMenuOpen && (
+            <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
           )}
-        >
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarImage src={userImageUrl} alt={userName} />
-            <AvatarFallback className="bg-sidebar-accent text-xs text-sidebar-foreground">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          {(isOverlay || !collapsed) && (
-            <div className="flex-1 overflow-hidden">
-              <p className="truncate text-sm font-medium text-sidebar-foreground">{userName}</p>
-              <p className="truncate text-xs text-sidebar-foreground/60">{orgName}</p>
+          {userMenuOpen && (
+            <div className="absolute bottom-full left-2 right-2 z-20 mb-1 overflow-hidden rounded-md border border-sidebar-border bg-sidebar shadow-lg">
+              <button
+                onClick={async () => {
+                  await signOut({ redirectUrl: '/sign-in' })
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                Sair
+              </button>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setUserMenuOpen((v) => !v)}
+            className={cn(
+              'flex w-full items-center p-3 transition-colors hover:bg-sidebar-accent',
+              !isOverlay && collapsed ? 'justify-center' : 'gap-3',
+            )}
+          >
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarImage src={userImageUrl} alt={userName} />
+              <AvatarFallback className="bg-sidebar-accent text-xs text-sidebar-foreground">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            {(isOverlay || !collapsed) && (
+              <div className="flex-1 overflow-hidden text-left">
+                <p className="truncate text-sm font-medium text-sidebar-foreground">{userName}</p>
+                <p className="truncate text-xs text-sidebar-foreground/60">{orgName}</p>
+              </div>
+            )}
+          </button>
         </div>
       </aside>
     </TooltipProvider>

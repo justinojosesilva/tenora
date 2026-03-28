@@ -17,12 +17,15 @@ export async function withTenantRLS<T>(
   tenantId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ) {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      SELECT set_config('app.tenant_id', ${tenantId}, TRUE)
-    `
-    return fn(tx)
-  })
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`
+        SELECT set_config('app.tenant_id', ${tenantId}, TRUE)
+      `
+      return fn(tx)
+    },
+    { timeout: 30000 },
+  )
 }
 
 export function prismaWithTenant(tenantId: string): PrismaClient {

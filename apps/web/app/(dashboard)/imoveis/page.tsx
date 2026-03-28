@@ -93,7 +93,7 @@ export default async function ImoveisPage({
 }: {
   searchParams: Promise<SearchParams>
 }) {
-  const { orgId, sessionClaims } = await auth()
+  const { orgId, sessionClaims, orgRole } = await auth()
   const params = await searchParams
 
   if (!orgId) return null
@@ -101,9 +101,13 @@ export default async function ImoveisPage({
   const page = Math.max(1, Number(params.page ?? 1))
   const status = params.status as PropertyStatus | undefined
   const type = params.type as PropertyType | undefined
-  const orgRole = (sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
-    | string
-    | undefined
+
+  // Prefer custom role from public_metadata (requires Clerk JWT template with "metadata": "{{user.public_metadata}}")
+  // Fallback: strip "org:" prefix from Clerk's built-in orgRole (org:admin → admin)
+  const resolvedRole =
+    ((sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
+      | string
+      | undefined) ?? orgRole?.replace(/^org:/, '')
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-6 py-8">
@@ -114,7 +118,7 @@ export default async function ImoveisPage({
       <Suspense fallback={<PropertyListSkeleton />}>
         <PropertySection
           orgId={orgId}
-          orgRole={orgRole}
+          orgRole={resolvedRole}
           search={params.search}
           status={status}
           type={type}

@@ -24,6 +24,7 @@ export async function createPropertyAction(
     state: formData.get('state') || undefined,
     zipCode: formData.get('zipCode') || undefined,
     type: formData.get('type') as string,
+    status: (formData.get('status') as string) || undefined,
     area: formData.get('area') ? Number(formData.get('area')) : undefined,
     adminFeePct: formData.get('adminFeePct') ? Number(formData.get('adminFeePct')) : undefined,
     rentAmount: formData.get('rentAmount') ? Number(formData.get('rentAmount')) : undefined,
@@ -58,6 +59,7 @@ export async function updatePropertyAction(
     state: formData.get('state') || undefined,
     zipCode: formData.get('zipCode') || undefined,
     type: (formData.get('type') as string) || undefined,
+    status: (formData.get('status') as string) || undefined,
     area: formData.get('area') ? Number(formData.get('area')) : undefined,
     adminFeePct: formData.get('adminFeePct') ? Number(formData.get('adminFeePct')) : undefined,
     rentAmount: formData.get('rentAmount') ? Number(formData.get('rentAmount')) : undefined,
@@ -88,12 +90,13 @@ export async function updatePropertyAction(
 export async function deletePropertyAction(
   id: string,
 ): Promise<{ error?: string; success?: boolean }> {
-  const { orgId, sessionClaims } = await auth()
+  const { orgId, sessionClaims, orgRole } = await auth()
   if (!orgId) return { error: 'Não autenticado' }
 
-  const role = (sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
-    | string
-    | undefined
+  const role =
+    ((sessionClaims?.metadata as Record<string, unknown> | undefined)?.role as
+      | string
+      | undefined) ?? orgRole?.replace(/^org:/, '')
   if (role !== 'admin' && role !== 'operacional') {
     return { error: 'Sem permissão para excluir imóveis' }
   }
