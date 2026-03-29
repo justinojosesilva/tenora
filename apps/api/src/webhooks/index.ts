@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { Webhook } from 'svix'
+import Stripe from 'stripe'
 import { db as rootDb } from '@tenora/db'
 import { UserRole } from '@prisma/client'
 
@@ -214,5 +215,85 @@ export async function registerWebhooks(server: FastifyInstance) {
       server.log.error({ msg: 'Erro ao processar webhook Clerk', error })
       return reply.status(500).send({ error: 'Internal server error' })
     }
+  })
+
+  // ── Stripe Webhook ──────────────────────────────────────────────────────────
+  server.post('/webhooks/stripe', { config: { rawBody: true } }, async (request, reply) => {
+    const stripeSecret = process.env.STRIPE_SECRET_KEY
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+
+    if (!stripeSecret || !webhookSecret) {
+      server.log.error('STRIPE_SECRET_KEY ou STRIPE_WEBHOOK_SECRET não configurados')
+      return reply.status(500).send({ error: 'Stripe not configured' })
+    }
+
+    const stripe = new Stripe(stripeSecret)
+    const sig = request.headers['stripe-signature'] as string
+
+    let event: Stripe.Event
+    try {
+      const rawBody =
+        (request as any).rawBody instanceof Buffer
+          ? (request as any).rawBody
+          : Buffer.from(
+              typeof request.body === 'string' ? request.body : JSON.stringify(request.body),
+            )
+
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      server.log.warn({ msg: 'Stripe webhook signature inválida', error: msg })
+      return reply.status(400).send({ error: `Webhook Error: ${msg}` })
+    }
+
+    server.log.info({ msg: 'Stripe webhook recebido', type: event.type })
+
+    const planMap: Record<string, 'starter' | 'pro' | 'scale'> = {
+      [process.env.STRIPE_PRICE_STARTER ?? '']: 'starter',
+      [process.env.STRIPE_PRICE_PRO ?? '']: 'pro',
+      [process.env.STRIPE_PRICE_SCALE ?? '']: 'scale',
+    }
+
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription
+        const customerId = subscription.customer as string
+        const priceId = subscription.items.data[0]?.price.id ?? ''
+        const plan = planMap[priceId] ?? 'starter'
+
+        await rootDb.tenant.updateMany({
+          where: { stripeCustomerId: customerId },
+          data: {
+            stripeSubscriptionId: subscription.id,
+            plan,
+          },
+        })
+
+        server.log.info({ msg: 'Tenant plan atualizado via Stripe', customerId, plan })
+        break
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription
+        const customerId = subscription.customer as string
+
+        await rootDb.tenant.updateMany({
+          where: { stripeCustomerId: customerId },
+          data: {
+            stripeSubscriptionId: null,
+            plan: 'starter',
+          },
+        })
+
+        server.log.info({ msg: 'Assinatura cancelada — tenant resetado para starter', customerId })
+        break
+      }
+
+      default:
+        server.log.debug({ msg: 'Stripe event type não tratado', type: event.type })
+    }
+
+    return reply.status(200).send({ received: true })
   })
 }

@@ -102,6 +102,10 @@ model Tenant {
   stripeCustomerId     String? @map("stripe_customer_id")
   stripeSubscriptionId String? @map("stripe_subscription_id")
 
+  // Onboarding
+  onboardingCompletedAt  DateTime? @map("onboarding_completed_at")
+  onboardingSkippedSteps String[]  @default([]) @map("onboarding_skipped_steps")
+
   // Relações
   users            User[]
   properties       Property[]

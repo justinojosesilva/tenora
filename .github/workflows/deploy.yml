@@ -50,6 +50,24 @@ jobs:
           DATABASE_URL_MIGRATOR: ${{ secrets.STAGING_DATABASE_URL_MIGRATOR }}
         run: pnpm --filter @tenora/db exec prisma migrate deploy
 
+      - name: Verificar sincronia das migrations (staging)
+        id: migration-status-staging
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL_MIGRATOR }}
+          DATABASE_URL_MIGRATOR: ${{ secrets.STAGING_DATABASE_URL_MIGRATOR }}
+        run: pnpm --filter @tenora/db exec prisma migrate status
+
+      - name: Notificar divergência de migrations no Slack (staging)
+        if: failure() && steps.migration-status-staging.outcome == 'failure'
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "⚠️ *[Tenora] Divergência de migrations detectada no staging!*\n*Workflow:* ${{ github.workflow }}\n*Commit:* `${{ github.sha }}`\n*Author:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+
       # Deploy api → Render
       - name: Deploy api → Render staging
         run: |
@@ -100,6 +118,24 @@ jobs:
           DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           DATABASE_URL_MIGRATOR: ${{ secrets.PROD_DATABASE_URL_MIGRATOR }}
         run: pnpm --filter @tenora/db exec prisma migrate deploy
+
+      - name: Verificar sincronia das migrations (production)
+        id: migration-status-prod
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL_MIGRATOR }}
+          DATABASE_URL_MIGRATOR: ${{ secrets.PROD_DATABASE_URL_MIGRATOR }}
+        run: pnpm --filter @tenora/db exec prisma migrate status
+
+      - name: Notificar divergência de migrations no Slack (production)
+        if: failure() && steps.migration-status-prod.outcome == 'failure'
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "🚨 *[Tenora] Divergência de migrations detectada em PRODUCTION!*\n*Workflow:* ${{ github.workflow }}\n*Commit:* `${{ github.sha }}`\n*Author:* ${{ github.actor }}\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
 
       # Deploy api → Render
       - name: Deploy api → Render staging

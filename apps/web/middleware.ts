@@ -33,6 +33,11 @@ export default clerkMiddleware(async (auth, req) => {
   if (isOnboardingRoute(req)) {
     return NextResponse.redirect(new URL('/dashboard', req.url))
   }
+
+  // Injetar pathname como header para que o layout do dashboard possa lê-lo
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-pathname', req.nextUrl.pathname)
+  return NextResponse.next({ request: { headers: requestHeaders } })
 })
 
 export const config = {

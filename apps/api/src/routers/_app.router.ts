@@ -5,6 +5,7 @@ import { documentRouter } from './document.router.js'
 import { usersRouter } from './users.router.js'
 import { onboardingRouter } from './onboarding.router.js'
 import { leaseRouter } from './lease.router.js'
+import { billingRouter } from './billing.router.js'
 
 export const appRouter: TRPCRouter = router({
   property: propertyRouter,
@@ -13,6 +14,7 @@ export const appRouter: TRPCRouter = router({
   users: usersRouter,
   onboarding: onboardingRouter,
   lease: leaseRouter,
+  billing: billingRouter,
 })
 
 export type AppRouter = typeof appRouter

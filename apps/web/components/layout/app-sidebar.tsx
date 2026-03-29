@@ -17,6 +17,8 @@ import {
   PanelLeftOpen,
   X,
   LogOut,
+  ScrollText,
+  CreditCard,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -33,6 +35,7 @@ const NAV_GROUPS = [
     items: [
       { label: 'Imóveis', href: '/imoveis', icon: Building2 },
       { label: 'Proprietários', href: '/proprietarios', icon: Users },
+      { label: 'Contratos', href: '/contratos', icon: ScrollText },
     ],
   },
   {
@@ -49,7 +52,10 @@ const NAV_GROUPS = [
   },
 ]
 
-const NAV_BOTTOM = [{ label: 'Configurações', href: '/configuracoes', icon: Settings }]
+const NAV_BOTTOM = [
+  { label: 'Assinatura', href: '/billing', icon: CreditCard },
+  { label: 'Configurações', href: '/configuracoes', icon: Settings },
+]
 
 export interface AppSidebarProps {
   orgName: string

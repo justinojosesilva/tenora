@@ -102,8 +102,19 @@ export async function deletePropertyAction(
   }
 
   const db = prismaWithTenant(orgId)
-  const existing = await db.property.findUnique({ where: { id, deletedAt: null } })
+  const existing = await db.property.findUnique({
+    where: { id, deletedAt: null },
+    include: {
+      leases: {
+        where: { deletedAt: null, status: { in: ['active', 'renewing'] } },
+        select: { id: true },
+      },
+    },
+  })
   if (!existing) return { error: 'Imóvel não encontrado' }
+  if (existing.leases.length > 0) {
+    return { error: 'Não é possível excluir imóvel com contrato ativo' }
+  }
 
   await db.property.update({ where: { id }, data: { deletedAt: new Date() } })
 

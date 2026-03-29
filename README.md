@@ -155,6 +155,34 @@ O workflow usa dois usuários de banco distintos:
 
 O shadow database (`DATABASE_SHADOW_URL`) é usado pelo Prisma em desenvolvimento para validar as migrations antes de aplicá-las ao banco principal.
 
+### Verificação de sincronia de migrations (CI/CD)
+
+O CI e o pipeline de deploy executam `prisma migrate status` automaticamente após cada `prisma migrate deploy` para confirmar que todos os ambientes estão em sincronia com o schema do repositório.
+
+| Onde              | Quando                | Ação em caso de divergência                        |
+| ----------------- | --------------------- | -------------------------------------------------- |
+| CI (`ci.yml`)     | Em todo PR/push       | Pipeline falha — deve ser corrigido antes do merge |
+| Deploy staging    | Push para `main`      | Pipeline falha + alerta no Slack (`#deploys`)      |
+| Deploy production | Após aprovação manual | Pipeline falha + alerta no Slack (`#deploys`)      |
+
+#### Como verificar manualmente
+
+```bash
+# Checar status das migrations no banco local
+pnpm --filter @tenora/db exec prisma migrate status
+
+# Checar em staging (requer acesso direto ou via tunnel)
+DATABASE_URL_MIGRATOR="<staging-migrator-url>" \
+  pnpm --filter @tenora/db exec prisma migrate status
+```
+
+#### O que fazer se o banco divergir
+
+1. Identificar as migrations pendentes com `prisma migrate status`
+2. Se houver migrations não aplicadas: `pnpm --filter @tenora/db exec prisma migrate deploy`
+3. Se houver drift (schema diverge sem migration pendente): revisar o histórico de `_prisma_migrations` e corrigir manualmente
+4. O secret `SLACK_WEBHOOK_URL` deve ser configurado nos GitHub Environments `staging` e `production` para que os alertas funcionem
+
 ### Rollback de migration
 
 O Prisma não oferece rollback automático de migrations. O processo manual é:
