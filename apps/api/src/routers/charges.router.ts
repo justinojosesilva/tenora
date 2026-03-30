@@ -77,6 +77,15 @@ export const chargesRouter: TRPCRouter = router({
     .mutation(async ({ ctx, input }) => {
       const existing = await ctx.db.billingCharge.findUnique({
         where: { id: input.id },
+        include: {
+          lease: {
+            select: {
+              rentAmount: true,
+              adminFeePct: true,
+              property: { select: { ownerId: true } },
+            },
+          },
+        },
       })
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'Cobrança não encontrada' })
 
@@ -87,13 +96,29 @@ export const chargesRouter: TRPCRouter = router({
         })
       }
 
-      return ctx.db.billingCharge.update({
-        where: { id: input.id },
-        data: {
-          status: 'paid',
-          paidAt: input.paidAt ?? new Date(),
-          paidAmount: input.paidAmount,
-        },
+      const rentAmount = Number(existing.lease.rentAmount)
+      const adminFeePct = Number(existing.lease.adminFeePct)
+      const repasse = rentAmount - (rentAmount * adminFeePct) / 100
+      const ownerId = existing.lease.property.ownerId
+
+      return ctx.db.$transaction(async (tx) => {
+        const updated = await tx.billingCharge.update({
+          where: { id: input.id },
+          data: {
+            status: 'paid',
+            paidAt: input.paidAt ?? new Date(),
+            paidAmount: input.paidAmount,
+          },
+        })
+
+        if (ownerId) {
+          await tx.ownerAccount.updateMany({
+            where: { ownerId },
+            data: { balance: { increment: repasse } },
+          })
+        }
+
+        return updated
       })
     }),
 

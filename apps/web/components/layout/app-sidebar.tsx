@@ -19,6 +19,7 @@ import {
   LogOut,
   ScrollText,
   CreditCard,
+  Receipt,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -53,6 +54,7 @@ const NAV_GROUPS = [
 ]
 
 const NAV_BOTTOM = [
+  { label: 'Cobranças', href: '/cobrancas', icon: Receipt },
   { label: 'Assinatura', href: '/billing', icon: CreditCard },
   { label: 'Configurações', href: '/configuracoes', icon: Settings },
 ]

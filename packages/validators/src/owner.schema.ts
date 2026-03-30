@@ -27,3 +27,13 @@ export const OwnerListSchema = z.object({
 export type OwnerCreate = z.infer<typeof OwnerCreateSchema>
 export type OwnerUpdate = z.infer<typeof OwnerUpdateSchema>
 export type OwnerList = z.infer<typeof OwnerListSchema>
+
+export const OwnerStatementSchema = z.object({
+  ownerId: z.string().uuid(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+  page: z.number().min(1).default(1),
+  limit: z.number().min(1).max(100).default(20),
+})
+
+export type OwnerStatement = z.infer<typeof OwnerStatementSchema>

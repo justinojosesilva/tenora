@@ -1,37 +1,46 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Suspense } from 'react'
+import { auth } from '@clerk/nextjs/server'
+import { prismaWithTenant } from '@tenora/db'
+import { KpiCards } from '@/components/dashboard/kpi-cards'
+import { KpiCardsSkeleton } from '@/components/dashboard/kpi-cards-skeleton'
 
 export const metadata = { title: 'Dashboard — Tenora' }
 
-export default function DashboardPage() {
+async function KpiSection({ orgId }: { orgId: string }) {
+  const db = prismaWithTenant(orgId)
+
+  const [totalProperties, rentedProperties, activeLeases, pendingCharges] = await Promise.all([
+    db.property.count({ where: { deletedAt: null } }),
+    db.property.count({ where: { deletedAt: null, status: 'rented' } }),
+    db.lease.count({ where: { deletedAt: null, status: 'active' } }),
+    db.billingCharge.count({ where: { status: 'pending' } }),
+  ])
+
+  return (
+    <KpiCards
+      totalProperties={totalProperties}
+      rentedProperties={rentedProperties}
+      activeLeases={activeLeases}
+      pendingCharges={pendingCharges}
+    />
+  )
+}
+
+export default async function DashboardPage() {
+  const { orgId } = await auth()
+  if (!orgId) return null
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-bold">Bom dia!</h1>
-        <Badge variant="secondary">Onboarding completo</Badge>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Bem-vindo ao Tenora. O dashboard completo será implementado na próxima sprint.
-      </p>
+      <p className="mt-1 text-sm text-muted-foreground">Visão geral da sua imobiliária</p>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Receita Bruta', value: 'R$ 0,00', color: 'text-green-600' },
-          { label: 'Repasse Proprietários', value: 'R$ 0,00', color: 'text-blue-600' },
-          { label: 'Despesas Operacionais', value: 'R$ 0,00', color: 'text-orange-600' },
-          { label: 'Lucro Líquido', value: 'R$ 0,00', color: 'text-emerald-600' },
-        ].map((kpi) => (
-          <Card key={kpi.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {kpi.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="mt-8">
+        <Suspense fallback={<KpiCardsSkeleton />}>
+          <KpiSection orgId={orgId} />
+        </Suspense>
       </div>
     </div>
   )
