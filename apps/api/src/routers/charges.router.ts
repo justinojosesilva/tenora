@@ -112,9 +112,10 @@ export const chargesRouter: TRPCRouter = router({
         })
 
         if (ownerId) {
-          await tx.ownerAccount.updateMany({
+          await tx.ownerAccount.upsert({
             where: { ownerId },
-            data: { balance: { increment: repasse } },
+            update: { balance: { increment: repasse } },
+            create: { tenantId: ctx.tenantId, ownerId, balance: repasse },
           })
         }
 

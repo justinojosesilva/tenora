@@ -419,6 +419,52 @@ describe('charges.markAsPaid — regras de negócio', () => {
     expect(repasse).toBe(1800) // 2000 - (2000 * 10%) = 1800
   })
 
+  it('[S4-01] upsert cria OwnerAccount automaticamente quando account não existe', async () => {
+    const ts = Date.now()
+    const rlsA = prismaWithTenant(f.tenantA.id)
+
+    // Cria proprietário sem OwnerAccount
+    const ownerNoAccount = await rlsA.owner.create({
+      data: {
+        tenantId: f.tenantA.id,
+        name: 'Proprietário Sem Account',
+        cpfCnpj: `777.666.555-${ts.toString().slice(-2)}`,
+        email: `owner-no-account-${ts}@test.com`,
+      },
+    })
+
+    // Confirma que não existe account para este owner
+    const accountBefore = await rlsA.ownerAccount.findUnique({
+      where: { ownerId: ownerNoAccount.id },
+    })
+    expect(accountBefore).toBeNull()
+
+    const repasse = 1800 // 2000 - (2000 * 10%) = 1800
+
+    // Simula a lógica corrigida (upsert) do charges.router.ts markAsPaid
+    await rlsA.$transaction(async (tx) => {
+      await tx.ownerAccount.upsert({
+        where: { ownerId: ownerNoAccount.id },
+        update: { balance: { increment: repasse } },
+        create: { tenantId: f.tenantA.id, ownerId: ownerNoAccount.id, balance: repasse },
+      })
+    })
+
+    // Verifica que account foi criada com saldo correto
+    const accountAfter = await rlsA.ownerAccount.findUnique({
+      where: { ownerId: ownerNoAccount.id },
+    })
+    expect(accountAfter).not.toBeNull()
+    expect(Number(accountAfter!.balance)).toBeCloseTo(repasse, 2)
+
+    // Cleanup
+    await rlsA.ownerAccount.delete({ where: { ownerId: ownerNoAccount.id } })
+    await rlsA.owner.update({
+      where: { id: ownerNoAccount.id },
+      data: { deletedAt: new Date() },
+    })
+  })
+
   it('cobrança cancelada não pode ser marcada como paga', async () => {
     const rlsA = prismaWithTenant(f.tenantA.id)
 
