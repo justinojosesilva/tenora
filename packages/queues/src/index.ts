@@ -63,6 +63,7 @@ export interface NotificationSendJobData {
   to: string
   subject: string
   body: string
+  leaseId?: string // presente em alertas de vencimento para controle de dedup
 }
 
 export interface DlqJobData {

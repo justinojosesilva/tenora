@@ -160,4 +160,21 @@ export const leaseRouter: TRPCRouter = router({
         data: { deletedAt: new Date() },
       })
     }),
+
+  // Lista contratos ativos vencendo nos próximos 30 dias (usado pelo dashboard)
+  expiring: protectedProcedure.query(async ({ ctx }) => {
+    const now = new Date()
+    const in30Days = new Date(now)
+    in30Days.setDate(in30Days.getDate() + 30)
+
+    return ctx.db.lease.findMany({
+      where: {
+        deletedAt: null,
+        status: 'active',
+        endDate: { gte: now, lte: in30Days },
+      },
+      include: { property: { select: { address: true, city: true, state: true } } },
+      orderBy: { endDate: 'asc' },
+    })
+  }),
 })

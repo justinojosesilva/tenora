@@ -1,14 +1,17 @@
 import * as Sentry from '@sentry/node'
 import { Worker } from 'bullmq'
+import { Resend } from 'resend'
 import {
   QUEUE_NAMES,
   redisConnection,
   dlqQueue,
+  notificationSendQueue,
   type BankSyncJobData,
   type BillingGenerateJobData,
   type FinancialRepasseJobData,
   type NotificationSendJobData,
 } from '@tenora/queues'
+import { db } from '@tenora/db'
 
 // ---------------------------------------------------------------------------
 // Estratégia de backoff customizada — delays: 1s, 5s, 30s
@@ -67,6 +70,136 @@ async function moveToDlq(
       originalData: job.data,
     })
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cron: Scan de contratos vencendo (disparado diariamente às 08:00)
+// ---------------------------------------------------------------------------
+
+const EXPIRY_ALERT_DAYS = [30, 15, 7]
+
+/**
+ * Verifica se o alerta já foi enviado hoje para este contrato.
+ * Usa lastExpiryAlertAt para dedup dentro do mesmo dia (UTC).
+ */
+function alreadySentToday(lastAlertAt: Date | null): boolean {
+  if (!lastAlertAt) return false
+  const today = new Date()
+  return (
+    lastAlertAt.getUTCFullYear() === today.getUTCFullYear() &&
+    lastAlertAt.getUTCMonth() === today.getUTCMonth() &&
+    lastAlertAt.getUTCDate() === today.getUTCDate()
+  )
+}
+
+async function runLeaseExpiryScan() {
+  const now = new Date()
+
+  // Monta janelas de datas para cada threshold (30, 15 e 7 dias)
+  const dateWindows = EXPIRY_ALERT_DAYS.map((days) => {
+    const from = new Date(now)
+    from.setUTCHours(0, 0, 0, 0)
+    from.setUTCDate(from.getUTCDate() + days)
+
+    const to = new Date(from)
+    to.setUTCHours(23, 59, 59, 999)
+
+    return { days, from, to }
+  })
+
+  for (const { days, from, to } of dateWindows) {
+    const leases = await db.lease.findMany({
+      where: {
+        deletedAt: null,
+        status: 'active',
+        endDate: { gte: from, lte: to },
+        tenantEmail: { not: null }, // só notifica se tiver email do inquilino
+      },
+      include: {
+        property: { select: { address: true, city: true, state: true } },
+      },
+    })
+
+    for (const lease of leases) {
+      if (alreadySentToday(lease.lastExpiryAlertAt)) {
+        continue
+      }
+
+      if (!lease.tenantEmail) continue
+
+      const formattedDate = lease.endDate.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+
+      const propertyAddress = `${lease.property.address}, ${lease.property.city} - ${lease.property.state}`
+      const dashboardUrl = process.env.NEXT_PUBLIC_API_URL
+        ? `${process.env.NEXT_PUBLIC_API_URL.replace('/api', '')}/dashboard/contracts`
+        : 'https://app.tenora.com.br/dashboard/contracts'
+
+      const subject = `⚠️ Seu contrato vence em ${days} dias — ${propertyAddress}`
+      const body = buildExpiryEmailHtml({
+        tenantName: lease.tenantName,
+        propertyAddress,
+        endDate: formattedDate,
+        daysLeft: days,
+        dashboardUrl,
+      })
+
+      await notificationSendQueue.add(
+        'lease-expiry-alert',
+        {
+          tenantId: lease.tenantId,
+          to: lease.tenantEmail,
+          subject,
+          body,
+          leaseId: lease.id,
+        },
+        { jobId: `expiry-${lease.id}-${now.toISOString().slice(0, 10)}` }, // dedup por jobId único no dia
+      )
+
+      // Marca que o alerta foi disparado hoje
+      await db.lease.update({
+        where: { id: lease.id },
+        data: { lastExpiryAlertAt: now },
+      })
+    }
+  }
+}
+
+function buildExpiryEmailHtml(params: {
+  tenantName: string
+  propertyAddress: string
+  endDate: string
+  daysLeft: number
+  dashboardUrl: string
+}): string {
+  const { tenantName, propertyAddress, endDate, daysLeft, dashboardUrl } = params
+  return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, sans-serif; background: #f9fafb; padding: 32px 16px; color: #111827;">
+  <div style="max-width: 560px; margin: 0 auto; background: #fff; border-radius: 8px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.1);">
+    <h2 style="color: #b45309; margin-top: 0;">⚠️ Contrato próximo do vencimento</h2>
+    <p>Olá, <strong>${tenantName}</strong>!</p>
+    <p>Seu contrato de locação referente ao imóvel abaixo vence em <strong>${daysLeft} dias</strong>:</p>
+    <table style="width:100%; background:#f3f4f6; border-radius:6px; padding:16px; margin:16px 0; border-collapse:collapse;">
+      <tr><td style="padding:4px 0; color:#6b7280;">Imóvel</td><td style="padding:4px 0; font-weight:600;">${propertyAddress}</td></tr>
+      <tr><td style="padding:4px 0; color:#6b7280;">Data de vencimento</td><td style="padding:4px 0; font-weight:600;">${endDate}</td></tr>
+      <tr><td style="padding:4px 0; color:#6b7280;">Dias restantes</td><td style="padding:4px 0; font-weight:600; color:#b45309;">${daysLeft} dias</td></tr>
+    </table>
+    <p>Acesse o dashboard para mais informações ou para renovar o contrato:</p>
+    <a href="${dashboardUrl}" style="display:inline-block; background:#2563eb; color:#fff; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:600; margin-top:8px;">
+      Acessar Dashboard →
+    </a>
+    <p style="margin-top:32px; font-size:12px; color:#9ca3af;">
+      Esta é uma mensagem automática do sistema Tenora. Por favor, não responda este e-mail.
+    </p>
+  </div>
+</body>
+</html>`
 }
 
 // ---------------------------------------------------------------------------
@@ -131,13 +264,34 @@ function createFinancialRepasseWorker() {
 }
 
 function createNotificationSendWorker() {
+  const resend = new Resend(process.env.RESEND_API_KEY)
+
   const worker = new Worker<NotificationSendJobData>(
     QUEUE_NAMES.NOTIFICATION_SEND,
     async (job) => {
+      // job de scan diário — disparado pelo cron, processa internamente
+      if (job.name === 'lease-expiry-scan') {
+        console.log(`[notification:send] job ${job.id} | lease-expiry-scan iniciado`)
+        await runLeaseExpiryScan()
+        console.log(`[notification:send] job ${job.id} | lease-expiry-scan concluído`)
+        return
+      }
+
+      // job de envio de e-mail
       console.log(
         `[notification:send] job ${job.id} | tenant=${job.data.tenantId} to=${job.data.to} subject="${job.data.subject}"`,
       )
-      // TODO T-2x: implementar envio de notificações (email/push)
+
+      const { error } = await resend.emails.send({
+        from: process.env.EMAIL_FROM ?? 'Tenora <noreply@tenora.com.br>',
+        to: job.data.to,
+        subject: job.data.subject,
+        html: job.data.body,
+      })
+
+      if (error) {
+        throw new Error(`Resend error: ${error.message}`)
+      }
     },
     { connection: redisConnection, settings: workerSettings },
   )
@@ -147,6 +301,33 @@ function createNotificationSendWorker() {
   })
 
   return worker
+}
+
+// ---------------------------------------------------------------------------
+// Cron: agendar scan diário de contratos vencendo (08:00 UTC)
+// ---------------------------------------------------------------------------
+
+async function scheduleDailyLeaseExpiryScan() {
+  // Remove jobs repetíveis antigos com o mesmo nome para evitar duplicatas ao reiniciar
+  const repeatableJobs = await notificationSendQueue.getRepeatableJobs()
+  for (const job of repeatableJobs) {
+    if (job.name === 'lease-expiry-scan') {
+      await notificationSendQueue.removeRepeatableByKey(job.key)
+    }
+  }
+
+  await notificationSendQueue.add(
+    'lease-expiry-scan',
+    // NotificationSendJobData requer `to`, `subject`, `body` e `tenantId` —
+    // para o scan não precisamos destes campos, usamos strings vazias como sentinela.
+    { tenantId: 'system', to: '', subject: '', body: '' },
+    {
+      repeat: { pattern: '0 8 * * *', utc: true },
+      jobId: 'lease-expiry-scan-cron',
+    },
+  )
+
+  console.log('[jobs] Cron lease-expiry-scan agendado: 0 8 * * * (UTC)')
 }
 
 // ---------------------------------------------------------------------------
@@ -166,6 +347,8 @@ export async function startWorkers() {
       .filter((n) => n !== 'dlq')
       .join(', ')}`,
   )
+
+  await scheduleDailyLeaseExpiryScan()
 
   return workers
 }
