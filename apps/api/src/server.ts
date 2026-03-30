@@ -120,6 +120,8 @@ server.get('/health', async () => {
 
   let dbStatus = 'disconnected'
   let redisStatus = 'disconnected'
+  let pluggyStatus = 'disconnected'
+  let pluggyEnv = 'unconfigured'
 
   try {
     await db.$queryRaw`SELECT 1`
@@ -137,12 +139,31 @@ server.get('/health', async () => {
     await redis.quit()
   }
 
-  const allHealthy = dbStatus === 'connected' && redisStatus === 'connected'
+  // Validar configuração do Pluggy
+  const pluggyClientId = process.env.PLUGGY_CLIENT_ID
+  const pluggyClientSecret = process.env.PLUGGY_CLIENT_SECRET
+  const pluggyWebhookSecret = process.env.PLUGGY_WEBHOOK_SECRET
+  pluggyEnv = process.env.PLUGGY_ENV || 'unconfigured'
+
+  if (pluggyClientId && pluggyClientSecret && pluggyWebhookSecret) {
+    pluggyStatus = 'configured'
+  } else {
+    server.log.warn({
+      msg: 'Pluggy configuration incomplete',
+      hasClientId: !!pluggyClientId,
+      hasClientSecret: !!pluggyClientSecret,
+      hasWebhookSecret: !!pluggyWebhookSecret,
+    })
+  }
+
+  const allHealthy =
+    dbStatus === 'connected' && redisStatus === 'connected' && pluggyStatus === 'configured'
 
   return {
     status: allHealthy ? 'ok' : 'degraded',
     db: dbStatus,
     redis: redisStatus,
+    pluggy: { status: pluggyStatus, env: pluggyEnv },
     timestamp: new Date().toISOString(),
   }
 })

@@ -44,7 +44,11 @@
     "R2_PUBLIC_URL",
     "NEXT_PUBLIC_API_URL",
     "RESEND_API_KEY",
-    "EMAIL_FROM"
+    "EMAIL_FROM",
+    "PLUGGY_CLIENT_ID",
+    "PLUGGY_CLIENT_SECRET",
+    "PLUGGY_WEBHOOK_SECRET",
+    "PLUGGY_ENV"
   ],
   "tasks": {
     "build": {
