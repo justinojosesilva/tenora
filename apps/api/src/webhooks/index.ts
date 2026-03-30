@@ -201,7 +201,8 @@ export async function registerWebhooks(server: FastifyInstance) {
 
         default: {
           // Ignorar outros eventos
-          server.log.debug({ msg: 'Webhook Clerk type não tratado', type: (event as any).type })
+          const unknownEvent = event as Record<string, unknown>
+          server.log.debug({ msg: 'Webhook Clerk type não tratado', type: unknownEvent.type })
         }
       }
 
@@ -232,9 +233,10 @@ export async function registerWebhooks(server: FastifyInstance) {
 
     let event: Stripe.Event
     try {
+      const rawBodyProperty = request as unknown as { rawBody?: Buffer }
       const rawBody =
-        (request as any).rawBody instanceof Buffer
-          ? (request as any).rawBody
+        rawBodyProperty.rawBody instanceof Buffer
+          ? rawBodyProperty.rawBody
           : Buffer.from(
               typeof request.body === 'string' ? request.body : JSON.stringify(request.body),
             )

@@ -1,11 +1,10 @@
 import { z } from 'zod'
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { router, protectedProcedure, requireRole, type TRPCRouter } from '@tenora/trpc'
 import { TRPCError } from '@trpc/server'
 import { UserRole } from '@prisma/client'
 
-const ALLOWED_CONTENT_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 const MAX_SIZE_BYTES = 10 * 1024 * 1024 // 10MB
 const UPLOAD_URL_EXPIRY_SECONDS = 3600 // 1 hora
 

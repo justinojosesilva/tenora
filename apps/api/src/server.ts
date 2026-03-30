@@ -116,7 +116,7 @@ server.get('/health', async () => {
         port: Number(process.env.REDIS_PORT ?? 6379),
         password: process.env.REDIS_PASSWORD,
       }
-  const redis = new (Redis as any)({ ...redisOpts, lazyConnect: true })
+  const redis = new Redis({ ...redisOpts, lazyConnect: true })
 
   let dbStatus = 'disconnected'
   let redisStatus = 'disconnected'
