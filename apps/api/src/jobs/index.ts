@@ -32,6 +32,51 @@ const workerSettings = { backoffStrategy }
 // ---------------------------------------------------------------------------
 
 /**
+ * Envia alerta Slack quando um job é movido para a DLQ.
+ * Inclui: fila, job ID, erro, tenant (extraído do job data).
+ */
+async function sendJobFailureSlackAlert(
+  queue: string,
+  job: {
+    id?: string
+    name: string
+    data: unknown
+  },
+  err: Error,
+) {
+  const slackWebhook =
+    process.env.SLACK_WEBHOOK_JOBS_FAILED || process.env.SLACK_WEBHOOK_BILLING_ALERTS
+  if (!slackWebhook) return
+
+  try {
+    const jobData = job.data as Record<string, unknown>
+    const tenantId = jobData.tenantId ?? 'unknown'
+
+    await fetch(slackWebhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: `🚨 *Job falhou após todas as tentativas*`,
+        attachments: [
+          {
+            color: 'danger',
+            fields: [
+              { title: 'Fila', value: queue, short: true },
+              { title: 'Job ID', value: job.id ?? 'unknown', short: true },
+              { title: 'Job Name', value: job.name, short: true },
+              { title: 'Tenant', value: String(tenantId), short: true },
+              { title: 'Erro', value: err.message, short: false },
+            ],
+          },
+        ],
+      }),
+    })
+  } catch (slackErr) {
+    Sentry.captureException(slackErr)
+  }
+}
+
+/**
  * Move o job para a Dead Letter Queue após esgotar todas as tentativas.
  * Acionado pelo evento 'failed' quando job.attemptsMade >= job.opts.attempts.
  */
@@ -70,6 +115,9 @@ async function moveToDlq(
       failedReason: err.message,
       originalData: job.data,
     })
+
+    // Envia alerta Slack quando job é movido para DLQ
+    await sendJobFailureSlackAlert(queue, job, err)
   }
 }
 
@@ -337,39 +385,7 @@ function createBillingGenerateWorker() {
   )
 
   worker.on('failed', async (job, err) => {
-    if (job) {
-      // Log no Sentry
-      await moveToDlq(QUEUE_NAMES.BILLING_GENERATE, job, err)
-
-      // Alerta Slack (se configurado)
-      const slackWebhook = process.env.SLACK_WEBHOOK_BILLING_ALERTS
-      if (slackWebhook) {
-        try {
-          await fetch(slackWebhook, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text: `🚨 *Falha no job billing-generate*\n• Job ID: ${job.id}\n• Nome: ${job.name}\n• Erro: ${err.message}\n• Tentativas: ${job.attemptsMade}/${job.opts.attempts}`,
-              attachments: [
-                {
-                  color: 'danger',
-                  fields: [
-                    { title: 'Fila', value: QUEUE_NAMES.BILLING_GENERATE, short: true },
-                    {
-                      title: 'Tenant',
-                      value: (job.data as BillingGenerateJobData).tenantId,
-                      short: true,
-                    },
-                  ],
-                },
-              ],
-            }),
-          })
-        } catch (slackErr) {
-          Sentry.captureException(slackErr)
-        }
-      }
-    }
+    if (job) await moveToDlq(QUEUE_NAMES.BILLING_GENERATE, job, err)
   })
 
   return worker
