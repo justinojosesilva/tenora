@@ -4,6 +4,10 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '@clerk/nextjs/server'
 import { prismaWithTenant } from '@tenora/db'
 import { PropertyCreateSchema, PropertyUpdateSchema } from '@tenora/validators'
+import type { LeaseStatus } from '@/components/lease/lease-status-badge'
+import type { DrawerLease } from '@/components/lease/lease-drawer'
+
+export type PropertyLeaseItem = DrawerLease
 
 export type PropertyFormState = {
   error?: string
@@ -85,6 +89,43 @@ export async function updatePropertyAction(
 
   revalidatePath('/imoveis')
   return { success: true }
+}
+
+export async function getPropertyLeasesAction(propertyId: string): Promise<PropertyLeaseItem[]> {
+  const { orgId } = await auth()
+  if (!orgId) return []
+
+  const db = prismaWithTenant(orgId)
+  const leases = await db.lease.findMany({
+    where: { propertyId, deletedAt: null },
+    include: { property: { include: { owner: true } } },
+    orderBy: { startDate: 'desc' },
+  })
+
+  return leases.map((lease) => ({
+    id: lease.id,
+    propertyId: lease.propertyId,
+    tenantName: lease.tenantName,
+    tenantCpf: lease.tenantCpf,
+    tenantEmail: lease.tenantEmail,
+    tenantPhone: lease.tenantPhone,
+    rentAmount: lease.rentAmount.toString(),
+    adminFeePct: lease.adminFeePct.toString(),
+    readjustIndex: lease.readjustIndex,
+    dueDayOfMonth: lease.dueDayOfMonth,
+    startDate: lease.startDate.toISOString(),
+    endDate: lease.endDate.toISOString(),
+    signedAt: lease.signedAt ? lease.signedAt.toISOString() : null,
+    status: lease.status as LeaseStatus,
+    property: {
+      id: lease.property.id,
+      address: lease.property.address,
+      city: lease.property.city,
+      state: lease.property.state,
+      type: lease.property.type,
+      owner: lease.property.owner ? { name: lease.property.owner.name } : null,
+    },
+  }))
 }
 
 export async function deletePropertyAction(

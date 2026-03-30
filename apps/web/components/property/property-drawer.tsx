@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, FileText, History, Trash2 } from 'lucide-react'
+import { Building2, FileText, History, ScrollText, Trash2 } from 'lucide-react'
 import { Sheet } from '@/components/ui/sheet'
 import { Tabs } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { PropertyForm, type FormOwner, type FormProperty } from './property-form'
+import { PropertyContratosTab } from './property-contratos-tab'
 import { deletePropertyAction } from '@/app/(dashboard)/imoveis/actions'
 
 export type DrawerProperty = FormProperty & {
@@ -120,6 +121,10 @@ export function PropertyDrawer({ open, onClose, property, owners, canEdit, canDe
                   <History className="h-3.5 w-3.5" />
                   Histórico
                 </Tabs.Tab>
+                <Tabs.Tab value="contratos">
+                  <ScrollText className="h-3.5 w-3.5" />
+                  Contratos
+                </Tabs.Tab>
               </Tabs.List>
 
               <Tabs.Panel value="dados">
@@ -145,6 +150,16 @@ export function PropertyDrawer({ open, onClose, property, owners, canEdit, canDe
                     </p>
                   )}
                 </div>
+              </Tabs.Panel>
+
+              <Tabs.Panel value="contratos">
+                {property ? (
+                  <PropertyContratosTab property={property} canEdit={canEdit} />
+                ) : (
+                  <div className="p-5">
+                    <p className="text-sm text-muted-foreground">Salve o imóvel primeiro</p>
+                  </div>
+                )}
               </Tabs.Panel>
 
               <Tabs.Panel value="historico" className="p-5">
