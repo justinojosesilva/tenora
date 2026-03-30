@@ -229,10 +229,64 @@ function createBillingGenerateWorker() {
   const worker = new Worker<BillingGenerateJobData>(
     QUEUE_NAMES.BILLING_GENERATE,
     async (job) => {
+      const { tenantId, leaseId, dueDate: dueDateStr } = job.data
+      const dueDate = new Date(dueDateStr)
+
       console.log(
-        `[billing:generate] job ${job.id} | tenant=${job.data.tenantId} lease=${job.data.leaseId} due=${job.data.dueDate}`,
+        `[billing:generate] job ${job.id} | tenant=${tenantId} lease=${leaseId} due=${dueDateStr}`,
       )
-      // TODO T-2x: implementar geração de cobranças
+
+      // Idempotência: não criar duplicata para o mesmo mês/ano
+      const startOfMonth = new Date(dueDate.getFullYear(), dueDate.getMonth(), 1)
+      const endOfMonth = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0, 23, 59, 59)
+
+      const existingCharge = await db.billingCharge.findFirst({
+        where: {
+          tenantId,
+          leaseId,
+          dueDate: { gte: startOfMonth, lte: endOfMonth },
+          status: { not: 'cancelled' },
+        },
+      })
+
+      if (!existingCharge) {
+        const lease = await db.lease.findUnique({ where: { id: leaseId } })
+        if (!lease || lease.status === 'ended' || lease.deletedAt) {
+          console.log(
+            `[billing:generate] job ${job.id} | lease ${leaseId} não encontrado ou encerrado, pulando`,
+          )
+          return
+        }
+
+        const reference = dueDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        await db.billingCharge.create({
+          data: { tenantId, leaseId, amount: lease.rentAmount, dueDate, reference },
+        })
+
+        console.log(
+          `[billing:generate] job ${job.id} | cobrança criada para lease=${leaseId} mês=${reference}`,
+        )
+      } else {
+        console.log(
+          `[billing:generate] job ${job.id} | cobrança já existe para lease=${leaseId} neste mês, pulando`,
+        )
+      }
+
+      // Atualizar cobranças vencidas: pending + dueDate < hoje → overdue
+      const updated = await db.billingCharge.updateMany({
+        where: {
+          tenantId,
+          status: 'pending',
+          dueDate: { lt: new Date() },
+        },
+        data: { status: 'overdue' },
+      })
+
+      if (updated.count > 0) {
+        console.log(
+          `[billing:generate] job ${job.id} | ${updated.count} cobranças marcadas como overdue para tenant=${tenantId}`,
+        )
+      }
     },
     { connection: redisConnection, settings: workerSettings },
   )

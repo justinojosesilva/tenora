@@ -82,7 +82,13 @@ async function LeaseSection({
     db.lease.count({ where }),
     db.property.findMany({
       where: { deletedAt: null, status: { in: ['available', 'rented'] } },
-      select: { id: true, address: true, city: true, status: true },
+      select: {
+        id: true,
+        address: true,
+        city: true,
+        status: true,
+        owner: { select: { name: true } },
+      },
       orderBy: { address: 'asc' },
     }),
   ])
@@ -122,6 +128,7 @@ async function LeaseSection({
         address: p.address,
         city: p.city,
         status: p.status,
+        owner: p.owner ? { name: p.owner.name } : null,
       }))}
       canWrite={canWrite}
       total={total}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useActionState } from 'react'
+import { useEffect, useActionState, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,7 @@ type PropertyOption = {
   address: string
   city: string | null
   status: string
+  owner: { name: string } | null
 }
 
 type Props = {
@@ -51,6 +52,8 @@ export function LeaseForm({ lease, properties, canWrite, onSuccess }: Props) {
 
   const [state, formAction, isPending] = useActionState<LeaseFormState, FormData>(action, null)
 
+  const [selectedPropertyId, setSelectedPropertyId] = useState(lease?.propertyId ?? '')
+
   useEffect(() => {
     if (state?.success) onSuccess?.()
   }, [state?.success]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,6 +63,8 @@ export function LeaseForm({ lease, properties, canWrite, onSuccess }: Props) {
   const availableProperties = isEdit
     ? properties
     : properties.filter((p) => p.status === 'available')
+
+  const selectedProperty = availableProperties.find((p) => p.id === selectedPropertyId)
 
   const selectClass =
     'h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
@@ -79,7 +84,8 @@ export function LeaseForm({ lease, properties, canWrite, onSuccess }: Props) {
         <select
           id="lf-propertyId"
           name="propertyId"
-          defaultValue={lease?.propertyId ?? ''}
+          value={selectedPropertyId}
+          onChange={(e) => setSelectedPropertyId(e.target.value)}
           disabled={!canWrite || isPending || isEdit}
           className={selectClass}
           required
@@ -93,6 +99,16 @@ export function LeaseForm({ lease, properties, canWrite, onSuccess }: Props) {
           ))}
         </select>
         {err('propertyId') && <p className="text-xs text-destructive">{err('propertyId')}</p>}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Proprietário</Label>
+        <Input
+          value={selectedProperty?.owner?.name ?? 'Sem proprietário'}
+          disabled
+          className="bg-muted/50"
+          readOnly
+        />
       </div>
 
       <div className="space-y-1.5">

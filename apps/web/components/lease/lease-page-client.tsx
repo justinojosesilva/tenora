@@ -13,6 +13,7 @@ type PropertyOption = {
   address: string
   city: string | null
   status: string
+  owner: { name: string } | null
 }
 
 export type LeaseRow = DrawerLease
