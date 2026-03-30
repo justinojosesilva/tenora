@@ -16,6 +16,7 @@ export type {
   Lease,
   BillingCharge,
   Transaction,
+  TransactionSplit,
   MaintenanceOrder,
   OwnerAccount,
   Tenant,
