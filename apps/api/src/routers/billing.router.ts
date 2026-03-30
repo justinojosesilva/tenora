@@ -31,12 +31,14 @@ export const billingRouter: TRPCRouter = router({
     if (!tenant) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tenant não encontrado' })
 
     let subscriptionStatus: string | null = null
+    let trialEnd: number | null = null
 
     if (tenant.stripeSubscriptionId) {
       const stripe = getStripe()
       try {
         const sub = await stripe.subscriptions.retrieve(tenant.stripeSubscriptionId)
         subscriptionStatus = sub.status
+        trialEnd = sub.trial_end
       } catch {
         subscriptionStatus = null
       }
@@ -47,6 +49,7 @@ export const billingRouter: TRPCRouter = router({
       stripeCustomerId: tenant.stripeCustomerId,
       stripeSubscriptionId: tenant.stripeSubscriptionId,
       subscriptionStatus,
+      trialEnd,
     }
   }),
 

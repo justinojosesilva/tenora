@@ -1,8 +1,9 @@
 import { Suspense } from 'react'
 import { auth } from '@clerk/nextjs/server'
-import { prismaWithTenant } from '@tenora/db'
+import { db as rootDb, prismaWithTenant } from '@tenora/db'
 import { KpiCards } from '@/components/dashboard/kpi-cards'
 import { KpiCardsSkeleton } from '@/components/dashboard/kpi-cards-skeleton'
+import { SubscriptionStatus } from '@/components/dashboard/subscription-status'
 
 export const metadata = { title: 'Dashboard — Tenora' }
 
@@ -26,6 +27,28 @@ async function KpiSection({ orgId }: { orgId: string }) {
   )
 }
 
+async function SubscriptionSection({ orgId }: { orgId: string }) {
+  const tenant = await rootDb.tenant.findUnique({
+    where: { id: orgId },
+    select: {
+      plan: true,
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
+      status: true,
+    },
+  })
+
+  if (!tenant) return null
+
+  return (
+    <SubscriptionStatus
+      plan={tenant.plan as 'starter' | 'pro' | 'scale'}
+      subscriptionId={tenant.stripeSubscriptionId}
+      tenantStatus={tenant.status}
+    />
+  )
+}
+
 export default async function DashboardPage() {
   const { orgId } = await auth()
   if (!orgId) return null
@@ -37,10 +60,16 @@ export default async function DashboardPage() {
       </div>
       <p className="mt-1 text-sm text-muted-foreground">Visão geral da sua imobiliária</p>
 
-      <div className="mt-8">
-        <Suspense fallback={<KpiCardsSkeleton />}>
-          <KpiSection orgId={orgId} />
+      <div className="mt-8 space-y-8">
+        <Suspense fallback={null}>
+          <SubscriptionSection orgId={orgId} />
         </Suspense>
+
+        <div>
+          <Suspense fallback={<KpiCardsSkeleton />}>
+            <KpiSection orgId={orgId} />
+          </Suspense>
+        </div>
       </div>
     </div>
   )
