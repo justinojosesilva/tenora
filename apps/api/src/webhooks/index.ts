@@ -269,10 +269,17 @@ export async function registerWebhooks(server: FastifyInstance) {
           data: {
             stripeSubscriptionId: subscription.id,
             plan,
+            status: 'active',
           },
         })
 
-        server.log.info({ msg: 'Tenant plan atualizado via Stripe', customerId, plan })
+        server.log.info({
+          msg: 'Tenant sincronizado via Stripe',
+          customerId,
+          plan,
+          status: 'active',
+          subscriptionId: subscription.id,
+        })
         break
       }
 
@@ -285,10 +292,15 @@ export async function registerWebhooks(server: FastifyInstance) {
           data: {
             stripeSubscriptionId: null,
             plan: 'starter',
+            status: 'suspended',
           },
         })
 
-        server.log.info({ msg: 'Assinatura cancelada — tenant resetado para starter', customerId })
+        server.log.info({
+          msg: 'Assinatura cancelada via Stripe — tenant suspenso',
+          customerId,
+          status: 'suspended',
+        })
         break
       }
 
