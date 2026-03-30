@@ -8,6 +8,7 @@ import { Tabs } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { PropertyForm, type FormOwner, type FormProperty } from './property-form'
 import { PropertyContratosTab } from './property-contratos-tab'
+import { DocumentUpload } from './document-upload'
 import { deletePropertyAction } from '@/app/(dashboard)/imoveis/actions'
 
 export type DrawerProperty = FormProperty & {
@@ -137,19 +138,16 @@ export function PropertyDrawer({ open, onClose, property, owners, canEdit, canDe
               </Tabs.Panel>
 
               <Tabs.Panel value="documentos" className="p-5">
-                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-14 text-center">
-                  <FileText className="mb-2 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {property
-                      ? 'Nenhum documento enviado'
-                      : 'Salve o imóvel antes de enviar documentos'}
-                  </p>
-                  {property && (
-                    <p className="mt-1 text-xs text-muted-foreground/70">
-                      Upload de documentos disponível após configuração do R2
+                {property ? (
+                  <DocumentUpload propertyId={property.id} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-14 text-center">
+                    <FileText className="mb-2 h-8 w-8 text-muted-foreground/40" />
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Salve o imóvel antes de enviar documentos
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
               </Tabs.Panel>
 
               <Tabs.Panel value="contratos">
