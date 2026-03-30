@@ -48,7 +48,8 @@
     "PLUGGY_CLIENT_ID",
     "PLUGGY_CLIENT_SECRET",
     "PLUGGY_WEBHOOK_SECRET",
-    "PLUGGY_ENV"
+    "PLUGGY_ENV",
+    "SLACK_WEBHOOK_BILLING_ALERTS"
   ],
   "tasks": {
     "build": {

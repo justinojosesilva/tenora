@@ -6,6 +6,7 @@ import {
   redisConnection,
   dlqQueue,
   notificationSendQueue,
+  billingGenerateQueue,
   type BankSyncJobData,
   type BillingGenerateJobData,
   type FinancialRepasseJobData,
@@ -232,6 +233,50 @@ function createBillingGenerateWorker() {
       const { tenantId, leaseId, dueDate: dueDateStr } = job.data
       const dueDate = new Date(dueDateStr)
 
+      // Handler especial para o trigger mensal que processa todos os contratos
+      if (job.name === 'billing-generate-trigger') {
+        console.log(`[billing:generate] job ${job.id} | gatilho mensal iniciado`)
+
+        const now = new Date()
+        const dueDay = 1 // Vencimento no 1º de cada mês
+
+        // Iterar todos os tenants ativos
+        const tenants = await db.tenant.findMany({ where: { status: 'active' } })
+
+        for (const tenant of tenants) {
+          // Iterar todos os contratos ativos do tenant
+          const leases = await db.lease.findMany({
+            where: {
+              tenantId: tenant.id,
+              deletedAt: null,
+              status: 'active',
+            },
+          })
+
+          for (const lease of leases) {
+            // Enqueue job para cada contrato
+            const monthDueDate = new Date(now.getFullYear(), now.getMonth(), dueDay)
+            await billingGenerateQueue.add(
+              'lease-monthly-charge',
+              {
+                tenantId: tenant.id,
+                leaseId: lease.id,
+                dueDate: monthDueDate.toISOString(),
+              },
+              { priority: 10, jobId: `billing-${lease.id}-${monthDueDate.getTime()}` },
+            )
+          }
+
+          console.log(
+            `[billing:generate] job ${job.id} | ${leases.length} contratos enfileirados para tenant=${tenant.id}`,
+          )
+        }
+
+        console.log(`[billing:generate] job ${job.id} | gatilho mensal concluído`)
+        return
+      }
+
+      // Handler normal para jobs individuais
       console.log(
         `[billing:generate] job ${job.id} | tenant=${tenantId} lease=${leaseId} due=${dueDateStr}`,
       )
@@ -292,7 +337,39 @@ function createBillingGenerateWorker() {
   )
 
   worker.on('failed', async (job, err) => {
-    if (job) await moveToDlq(QUEUE_NAMES.BILLING_GENERATE, job, err)
+    if (job) {
+      // Log no Sentry
+      await moveToDlq(QUEUE_NAMES.BILLING_GENERATE, job, err)
+
+      // Alerta Slack (se configurado)
+      const slackWebhook = process.env.SLACK_WEBHOOK_BILLING_ALERTS
+      if (slackWebhook) {
+        try {
+          await fetch(slackWebhook, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: `🚨 *Falha no job billing-generate*\n• Job ID: ${job.id}\n• Nome: ${job.name}\n• Erro: ${err.message}\n• Tentativas: ${job.attemptsMade}/${job.opts.attempts}`,
+              attachments: [
+                {
+                  color: 'danger',
+                  fields: [
+                    { title: 'Fila', value: QUEUE_NAMES.BILLING_GENERATE, short: true },
+                    {
+                      title: 'Tenant',
+                      value: (job.data as BillingGenerateJobData).tenantId,
+                      short: true,
+                    },
+                  ],
+                },
+              ],
+            }),
+          })
+        } catch (slackErr) {
+          Sentry.captureException(slackErr)
+        }
+      }
+    }
   })
 
   return worker
@@ -385,6 +462,32 @@ async function scheduleDailyLeaseExpiryScan() {
 }
 
 // ---------------------------------------------------------------------------
+// Cron: agendar geração mensal de cobranças (1º do mês, 06:00 UTC)
+// ---------------------------------------------------------------------------
+
+async function scheduleMonthlyBillingGenerate() {
+  // Remove jobs repetíveis antigos com o mesmo nome para evitar duplicatas ao reiniciar
+  const repeatableJobs = await billingGenerateQueue.getRepeatableJobs()
+  for (const job of repeatableJobs) {
+    if (job.name === 'billing-generate-trigger') {
+      await billingGenerateQueue.removeRepeatableByKey(job.key)
+    }
+  }
+
+  await billingGenerateQueue.add(
+    'billing-generate-trigger',
+    // Payload com valores de sentinela — o job processará todos os contratos ativos
+    { tenantId: 'system', leaseId: 'system', dueDate: new Date().toISOString() },
+    {
+      repeat: { pattern: '0 6 1 * *', utc: true },
+      jobId: 'billing-generate-trigger-cron',
+    },
+  )
+
+  console.log('[jobs] Cron billing-generate-trigger agendado: 0 6 1 * * (UTC)')
+}
+
+// ---------------------------------------------------------------------------
 // Inicialização
 // ---------------------------------------------------------------------------
 
@@ -403,6 +506,7 @@ export async function startWorkers() {
   )
 
   await scheduleDailyLeaseExpiryScan()
+  await scheduleMonthlyBillingGenerate()
 
   return workers
 }
