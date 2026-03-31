@@ -35,11 +35,12 @@ Pronto. Acesse:
 
 ## Pré-requisitos
 
-| Ferramenta | Versão mínima | Verificar          |
-| ---------- | ------------- | ------------------ |
-| Node.js    | 20+           | `node --version`   |
-| pnpm       | 8+            | `pnpm --version`   |
-| Docker     | 24+           | `docker --version` |
+| Ferramenta | Versão mínima | Verificar                               |
+| ---------- | ------------- | --------------------------------------- |
+| Node.js    | 20+           | `node --version`                        |
+| pnpm       | 8+            | `pnpm --version`                        |
+| Docker     | 24+           | `docker --version`                      |
+| ESLint     | Sem warnings  | `pnpm lint` (zero warnings obrigatório) |
 
 ---
 
