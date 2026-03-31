@@ -90,4 +90,53 @@ export const splitRouter: TRPCRouter = router({
         orderBy: { createdAt: 'asc' },
       })
     }),
+
+  /**
+   * Resumo de splits por período: total agência vs proprietário.
+   * Agregação dos valores de TransactionSplit agrupados por party.
+   */
+  summary: protectedProcedure
+    .use(requireRole(UserRole.admin, UserRole.financeiro))
+    .input(
+      z.object({
+        dateFrom: z.string().datetime().optional(),
+        dateTo: z.string().datetime().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const dateWhere =
+        input.dateFrom && input.dateTo
+          ? {
+              transaction: {
+                date: {
+                  gte: new Date(input.dateFrom),
+                  lte: new Date(input.dateTo),
+                },
+              },
+            }
+          : input.dateFrom
+            ? { transaction: { date: { gte: new Date(input.dateFrom) } } }
+            : input.dateTo
+              ? { transaction: { date: { lte: new Date(input.dateTo) } } }
+              : {}
+
+      const splits = await ctx.db.transactionSplit.findMany({
+        where: dateWhere,
+        select: { party: true, amount: true },
+      })
+
+      const summary = splits.reduce(
+        (acc, split) => {
+          if (split.party === 'agency') {
+            acc.agency += Number(split.amount)
+          } else {
+            acc.owner += Number(split.amount)
+          }
+          return acc
+        },
+        { agency: 0, owner: 0 },
+      )
+
+      return summary
+    }),
 })

@@ -9,6 +9,6 @@ export const adminProcedure = t.procedure.use(requireRole(UserRole.admin))
 
 export type TRPCRouter = ReturnType<typeof t.router>
 
-export { createContext } from './context'
+export { createContext, type Context } from './context'
 export { requireRole }
 export { t }
