@@ -100,6 +100,35 @@ export class PluggyClientWrapper {
     const cacheKey = 'pluggy:connect_token'
     await this.redis.del(cacheKey)
   }
+
+  /**
+   * Fetch all transactions for a given account from Pluggy
+   * @param accountId The account ID to fetch transactions for
+   * @returns An array of transactions
+   */
+  async fetchAllTransactions(accountId: string): Promise<
+    Array<{
+      id: string
+      date: Date
+      description: string | null
+      descriptionRaw: string | null
+      amount: number
+      type: 'DEBIT' | 'CREDIT'
+    }>
+  > {
+    if (!this.client) {
+      throw new Error('Pluggy client not initialized')
+    }
+
+    try {
+      const transactions = await this.client.fetchAllTransactions(accountId)
+      return transactions
+    } catch (error) {
+      throw new Error(
+        `Pluggy transaction fetch failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
 }
 
 // Singleton instance

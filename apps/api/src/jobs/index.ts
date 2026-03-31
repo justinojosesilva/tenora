@@ -13,7 +13,9 @@ import {
   type FinancialRepasseJobData,
   type NotificationSendJobData,
 } from '@tenora/queues'
-import { db } from '@tenora/db'
+import { db, prismaWithTenant } from '@tenora/db'
+import { getPluggyClient } from '../lib/pluggy-client.js'
+import Redis from 'ioredis'
 
 // ---------------------------------------------------------------------------
 // Estratégia de backoff customizada — delays: 1s, 5s, 30s
@@ -318,10 +320,84 @@ function createBankSyncWorker() {
         return
       }
 
+      const { tenantId, bankConnectionId } = job.data
       console.log(
-        `[bank:sync] job ${job.id} | tenant=${job.data.tenantId} bankConnection=${job.data.bankConnectionId}`,
+        `[bank:sync] job ${job.id} | tenant=${tenantId} bankConnection=${bankConnectionId}`,
       )
-      // TODO T-2x: implementar sincronização via Pluggy
+
+      // Fetch bank connection with account details
+      const bankConnection = await db.bankConnection.findUnique({
+        where: { id: bankConnectionId },
+        include: { bankAccount: { select: { tenantId: true } } },
+      })
+
+      if (!bankConnection) {
+        console.warn(`[bank:sync] BankConnection ${bankConnectionId} not found`)
+        return
+      }
+
+      if (bankConnection.bankAccount.tenantId !== tenantId) {
+        throw new Error(
+          `[bank:sync] Tenant mismatch: job tenant=${tenantId}, connection tenant=${bankConnection.bankAccount.tenantId}`,
+        )
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const redisClient = new Redis(redisConnection as any)
+      const pluggy = getPluggyClient(redisClient)
+      const tenantDb = prismaWithTenant(tenantId)
+
+      try {
+        // Fetch all transactions from Pluggy for this account
+        const pluggyTransactions = await pluggy.fetchAllTransactions(bankConnection.pluggyAccountId)
+
+        console.log(
+          `[bank:sync] Fetched ${pluggyTransactions.length} transactions from Pluggy for account ${bankConnection.pluggyAccountId}`,
+        )
+
+        // Upsert transactions into database
+        let createdCount = 0
+        for (const pluggyTx of pluggyTransactions) {
+          const existing = await tenantDb.transaction.findFirst({
+            where: { pluggyTransactionId: pluggyTx.id },
+          })
+
+          if (existing) {
+            // Transaction already synced
+            continue
+          }
+
+          // Map Pluggy transaction to app transaction
+          await tenantDb.transaction.create({
+            data: {
+              tenantId,
+              bankAccountId: bankConnection.bankAccountId || null,
+              pluggyTransactionId: pluggyTx.id,
+              description: pluggyTx.description || pluggyTx.descriptionRaw || '',
+              amount: pluggyTx.amount,
+              type: pluggyTx.type.toLowerCase() as 'credit' | 'debit',
+              date: new Date(pluggyTx.date),
+              origin: 'bank_sync',
+            },
+          })
+          createdCount++
+        }
+
+        // Update lastSyncedAt timestamp
+        await db.bankConnection.update({
+          where: { id: bankConnectionId },
+          data: { lastSyncedAt: new Date() },
+        })
+
+        console.log(
+          `[bank:sync] Successfully synced ${createdCount} new transactions for ${bankConnectionId}`,
+        )
+      } catch (error) {
+        console.error(`[bank:sync] Error syncing transactions for ${bankConnectionId}:`, error)
+        throw error
+      } finally {
+        await redisClient.quit()
+      }
     },
     { connection: redisConnection, settings: workerSettings },
   )
