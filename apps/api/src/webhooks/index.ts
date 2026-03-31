@@ -1,8 +1,18 @@
+import { createHmac, timingSafeEqual } from 'crypto'
 import type { FastifyInstance } from 'fastify'
 import { Webhook } from 'svix'
 import Stripe from 'stripe'
 import { db as rootDb } from '@tenora/db'
 import { UserRole } from '@prisma/client'
+import { bankSyncQueue } from '@tenora/queues'
+
+// ── Pluggy Webhook Types ──────────────────────────────────────────────────────
+
+interface PluggyWebhookEvent {
+  event: string
+  itemId: string
+  data?: Record<string, unknown>
+}
 
 interface OrganizationMembershipCreatedPayload {
   type: 'organizationMembership.created'
@@ -308,6 +318,93 @@ export async function registerWebhooks(server: FastifyInstance) {
         server.log.debug({ msg: 'Stripe event type não tratado', type: event.type })
     }
 
+    return reply.status(200).send({ received: true })
+  })
+
+  // ── Pluggy Webhook ────────────────────────────────────────────────────────
+  server.post('/webhooks/pluggy', { config: { rawBody: true } }, async (request, reply) => {
+    const webhookSecret = process.env.PLUGGY_WEBHOOK_SECRET
+
+    if (!webhookSecret) {
+      server.log.error('PLUGGY_WEBHOOK_SECRET não configurada')
+      return reply.status(500).send({ error: 'Webhook secret not configured' })
+    }
+
+    // 1. Validar assinatura HMAC-SHA256
+    const signature = request.headers['x-pluggy-signature'] as string | undefined
+
+    if (!signature) {
+      server.log.warn({ msg: 'Pluggy webhook recebido sem assinatura' })
+      return reply.status(400).send({ error: 'Missing x-pluggy-signature header' })
+    }
+
+    const rawBodyProperty = request as unknown as { rawBody?: Buffer }
+    const rawBody =
+      rawBodyProperty.rawBody instanceof Buffer
+        ? rawBodyProperty.rawBody
+        : Buffer.from(
+            typeof request.body === 'string' ? request.body : JSON.stringify(request.body),
+          )
+
+    const expectedSig = createHmac('sha256', webhookSecret).update(rawBody).digest('hex')
+    const incomingSig = signature.startsWith('sha256=') ? signature.slice(7) : signature
+
+    let signaturesMatch = false
+    try {
+      signaturesMatch = timingSafeEqual(
+        Buffer.from(expectedSig, 'hex'),
+        Buffer.from(incomingSig, 'hex'),
+      )
+    } catch {
+      signaturesMatch = false
+    }
+
+    if (!signaturesMatch) {
+      server.log.warn({ msg: 'Pluggy webhook signature inválida' })
+      return reply.status(400).send({ error: 'Invalid signature' })
+    }
+
+    // 2. Parsear e logar o evento recebido
+    const body = request.body as PluggyWebhookEvent
+
+    server.log.info({
+      msg: 'Webhook Pluggy recebido',
+      event: body.event,
+      itemId: body.itemId,
+    })
+
+    // 3. Buscar BankConnection pelo pluggyItemId para obter tenantId e bankConnectionId
+    const bankConnection = await rootDb.bankConnection.findFirst({
+      where: { pluggyItemId: body.itemId },
+      include: { bankAccount: { select: { tenantId: true } } },
+    })
+
+    if (!bankConnection) {
+      server.log.warn({
+        msg: 'BankConnection não encontrada para pluggyItemId — ignorando webhook',
+        pluggyItemId: body.itemId,
+        event: body.event,
+      })
+      return reply.status(200).send({ received: true })
+    }
+
+    const tenantId = bankConnection.bankAccount.tenantId
+
+    // 4. Enfileirar job bank-sync para processamento assíncrono
+    await bankSyncQueue.add('bank-sync', {
+      tenantId,
+      bankConnectionId: bankConnection.id,
+    })
+
+    server.log.info({
+      msg: 'Job bank-sync enfileirado',
+      tenantId,
+      bankConnectionId: bankConnection.id,
+      event: body.event,
+      pluggyItemId: body.itemId,
+    })
+
+    // 5. Retornar 200 imediatamente (processamento é assíncrono)
     return reply.status(200).send({ received: true })
   })
 }
