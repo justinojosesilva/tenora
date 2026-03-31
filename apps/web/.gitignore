@@ -9,11 +9,6 @@
 # testing
 /coverage
 
-# playwright
-/playwright-report/
-/test-results/
-/.auth/
-
 # next.js
 /.next/
 /out/
