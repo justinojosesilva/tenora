@@ -1,127 +1,58 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest'
-import {
-  TenantStatus,
-  TenantPlan,
-  UserRole,
-  PropertyType,
-  PropertyStatus,
-  LeaseStatus,
-} from '@prisma/client'
-import { db, prismaWithTenant } from '../rls'
+import { LeaseStatus, PropertyStatus, PropertyType } from '@prisma/client'
+import { prismaWithTenant, withTenantRLS } from '../rls'
+import { TestFactory } from './factory'
 
-interface TestFixture {
-  tenantId: string
-  propertyAvailableId: string
-  propertyRentedId: string
-  propertyMaintenanceId: string
-}
-
-const fixture: TestFixture = {
-  tenantId: '',
-  propertyAvailableId: '',
-  propertyRentedId: '',
-  propertyMaintenanceId: '',
-}
+const factory = new TestFactory()
+let tenantId: string
+let propertyAvailableId: string
+let propertyRentedId: string
+let propertyMaintenanceId: string
 
 describe('S3-06 — Atualização de status do imóvel ao vincular/desvincular contrato', () => {
   beforeAll(async () => {
-    const tenant = await db.tenant.create({
-      data: {
-        name: 'Tenant Lease Test',
-        slug: `lease-test-${Date.now()}`,
-        plan: TenantPlan.starter,
-        status: TenantStatus.active,
-      },
-    })
-    fixture.tenantId = tenant.id
+    const tenant = await factory.createTenant()
+    tenantId = tenant.id
 
-    const rls = prismaWithTenant(fixture.tenantId)
+    await factory.createUser(tenantId)
 
-    await rls.user.create({
-      data: {
-        tenantId: fixture.tenantId,
-        clerkId: `clerk-lease-${Date.now()}`,
-        name: 'User Lease Test',
-        email: `lease-user-${Date.now()}@test.com`,
-        role: UserRole.admin,
-      },
-    })
-
-    const owner = await rls.owner.create({
-      data: {
-        tenantId: fixture.tenantId,
-        name: 'Owner Lease Test',
-        cpfCnpj: `111.222.333-${Date.now().toString().slice(-2)}`,
-        email: `owner-lease-${Date.now()}@test.com`,
-      },
-    })
-
+    const owner = await factory.createOwner(tenantId)
     const [available, rented, maintenance] = await Promise.all([
-      rls.property.create({
-        data: {
-          tenantId: fixture.tenantId,
-          ownerId: owner.id,
-          address: 'Rua Disponível, 1',
-          city: 'São Paulo',
-          state: 'SP',
-          type: PropertyType.residential,
-          status: PropertyStatus.available,
-          adminFeePct: 10,
-        },
+      factory.createProperty(tenantId, {
+        ownerId: owner.id,
+        status: PropertyStatus.available,
+        address: 'Rua Disponível, 1',
       }),
-      rls.property.create({
-        data: {
-          tenantId: fixture.tenantId,
-          ownerId: owner.id,
-          address: 'Rua Alugado, 2',
-          city: 'São Paulo',
-          state: 'SP',
-          type: PropertyType.residential,
-          status: PropertyStatus.rented,
-          adminFeePct: 10,
-        },
+      factory.createProperty(tenantId, {
+        ownerId: owner.id,
+        status: PropertyStatus.rented,
+        address: 'Rua Alugado, 2',
       }),
-      rls.property.create({
-        data: {
-          tenantId: fixture.tenantId,
-          ownerId: owner.id,
-          address: 'Rua Manutenção, 3',
-          city: 'São Paulo',
-          state: 'SP',
-          type: PropertyType.residential,
-          status: PropertyStatus.maintenance,
-          adminFeePct: 10,
-        },
+      factory.createProperty(tenantId, {
+        ownerId: owner.id,
+        status: PropertyStatus.maintenance,
+        address: 'Rua Manutenção, 3',
       }),
     ])
-
-    fixture.propertyAvailableId = available.id
-    fixture.propertyRentedId = rented.id
-    fixture.propertyMaintenanceId = maintenance.id
+    propertyAvailableId = available.id
+    propertyRentedId = rented.id
+    propertyMaintenanceId = maintenance.id
   })
 
-  afterAll(async () => {
-    const rls = prismaWithTenant(fixture.tenantId)
-    await rls.billingCharge.deleteMany({ where: { tenantId: fixture.tenantId } })
-    await rls.lease.deleteMany({ where: { tenantId: fixture.tenantId } })
-    await rls.property.deleteMany({ where: { tenantId: fixture.tenantId } })
-    await rls.owner.deleteMany({ where: { tenantId: fixture.tenantId } })
-    await rls.user.deleteMany({ where: { tenantId: fixture.tenantId } })
-    await db.tenant.delete({ where: { id: fixture.tenantId } })
-  })
+  afterAll(() => factory.cleanup())
 
   it('criar contrato muda status do imóvel de available → rented atomicamente', async () => {
-    const rls = prismaWithTenant(fixture.tenantId)
+    const rls = prismaWithTenant(tenantId)
 
     const now = new Date()
     const startDate = new Date(now.getFullYear(), now.getMonth(), 1)
     const endDate = new Date(now.getFullYear() + 1, now.getMonth(), 1)
 
-    const [lease] = await rls.$transaction(async (tx) => {
+    const [lease] = await withTenantRLS(tenantId, async (tx) => {
       const created = await tx.lease.create({
         data: {
-          tenantId: fixture.tenantId,
-          propertyId: fixture.propertyAvailableId,
+          tenantId,
+          propertyId: propertyAvailableId,
           tenantName: 'Inquilino Teste',
           rentAmount: 2000,
           adminFeePct: 10,
@@ -133,7 +64,7 @@ describe('S3-06 — Atualização de status do imóvel ao vincular/desvincular c
       })
 
       await tx.property.update({
-        where: { id: fixture.propertyAvailableId },
+        where: { id: propertyAvailableId },
         data: { status: PropertyStatus.rented },
       })
 
@@ -143,27 +74,27 @@ describe('S3-06 — Atualização de status do imóvel ao vincular/desvincular c
     expect(lease.status).toBe(LeaseStatus.active)
 
     const property = await rls.property.findUnique({
-      where: { id: fixture.propertyAvailableId },
+      where: { id: propertyAvailableId },
     })
     expect(property?.status).toBe(PropertyStatus.rented)
   })
 
   it('encerrar contrato reverte status do imóvel para available atomicamente', async () => {
-    const rls = prismaWithTenant(fixture.tenantId)
+    const rls = prismaWithTenant(tenantId)
 
     const activeLease = await rls.lease.findFirst({
-      where: { propertyId: fixture.propertyAvailableId, status: LeaseStatus.active },
+      where: { propertyId: propertyAvailableId, status: LeaseStatus.active },
     })
     expect(activeLease).not.toBeNull()
 
-    const [updatedLease] = await rls.$transaction(async (tx) => {
+    const [updatedLease] = await withTenantRLS(tenantId, async (tx) => {
       const ended = await tx.lease.update({
         where: { id: activeLease!.id },
         data: { status: LeaseStatus.ended },
       })
 
       await tx.property.update({
-        where: { id: fixture.propertyAvailableId },
+        where: { id: propertyAvailableId },
         data: { status: PropertyStatus.available },
       })
 
@@ -173,26 +104,26 @@ describe('S3-06 — Atualização de status do imóvel ao vincular/desvincular c
     expect(updatedLease.status).toBe(LeaseStatus.ended)
 
     const property = await rls.property.findUnique({
-      where: { id: fixture.propertyAvailableId },
+      where: { id: propertyAvailableId },
     })
     expect(property?.status).toBe(PropertyStatus.available)
   })
 
   it('imóvel rented não pode receber novo contrato (validação de status)', async () => {
-    const rls = prismaWithTenant(fixture.tenantId)
+    const rls = prismaWithTenant(tenantId)
 
     const property = await rls.property.findUnique({
-      where: { id: fixture.propertyRentedId },
+      where: { id: propertyRentedId },
     })
 
     expect(property?.status).toBe(PropertyStatus.rented)
   })
 
   it('imóvel maintenance não pode receber contrato (validação de status)', async () => {
-    const rls = prismaWithTenant(fixture.tenantId)
+    const rls = prismaWithTenant(tenantId)
 
     const property = await rls.property.findUnique({
-      where: { id: fixture.propertyMaintenanceId },
+      where: { id: propertyMaintenanceId },
     })
 
     expect(property?.status).toBe(PropertyStatus.maintenance)

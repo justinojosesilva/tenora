@@ -8,9 +8,10 @@
  *   [4] Imóvel já alugado não aparece no seletor de imóveis disponíveis
  *   [5] Encerrar contrato → imóvel volta para 'Disponível'
  *
- * Pré-condição (staging):
+ * Pré-condição:
  *   - Tenant A (E2E_USER_A_EMAIL) deve ter pelo menos 1 imóvel com
- *     status 'available' cadastrado no ambiente de staging.
+ *     status 'available'. Se E2E_TENANT_A_ID estiver definido, o fixture
+ *     db.setup.ts cria esse imóvel automaticamente via factory.
  */
 import { test, expect } from '@playwright/test'
 import { AUTH_FILE_A } from '../fixtures/auth.paths'

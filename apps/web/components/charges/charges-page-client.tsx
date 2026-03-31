@@ -148,7 +148,7 @@ export function ChargesPageClient({
   charges,
   tabSummaries,
   canWrite,
-  total,
+  total: _total,
   page,
   totalPages,
   activeTab,

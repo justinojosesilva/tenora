@@ -28,6 +28,9 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
 
+  // Teardown global: remove dados E2E criados pelo db.setup
+  globalTeardown: './e2e/fixtures/db.teardown.ts',
+
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
 
@@ -42,7 +45,7 @@ export default defineConfig({
   },
 
   projects: [
-    // Setup — cria os storageStates autenticados (roda antes dos testes)
+    // Setup — auth (Clerk storageState) + seed de dados via factory
     {
       name: 'setup',
       testMatch: /e2e\/fixtures\/.*\.setup\.ts/,
