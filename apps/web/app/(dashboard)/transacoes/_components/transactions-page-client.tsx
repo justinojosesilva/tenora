@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ArrowDownCircle, ArrowUpCircle, ArrowLeftRight } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +16,12 @@ export type TransactionRow = {
   date: string
   bankAccount: { name: string } | null
   lease: { tenantName: string } | null
+  splits: Array<{
+    id: string
+    party: 'agency' | 'owner'
+    amount: string
+    description: string | null
+  }>
 }
 
 type BankAccountOption = { id: string; name: string }
@@ -93,6 +100,131 @@ function TypeBadge({ type }: { type: TransactionRow['type'] }) {
   )
 }
 
+function SplitInfo({ splits }: { splits: TransactionRow['splits'] }) {
+  if (splits.length === 0) {
+    return (
+      <Badge
+        variant="outline"
+        className="shrink-0 whitespace-nowrap font-medium border-amber-500 bg-amber-50 text-amber-700"
+      >
+        Não processada
+      </Badge>
+    )
+  }
+
+  const agency = splits.find((s) => s.party === 'agency')
+  const owner = splits.find((s) => s.party === 'owner')
+
+  return (
+    <div className="flex items-center gap-2">
+      {agency && (
+        <span className="text-xs font-medium">Agência: {formatCurrency(agency.amount)}</span>
+      )}
+      {owner && (
+        <span className="text-xs font-medium">Proprietário: {formatCurrency(owner.amount)}</span>
+      )}
+    </div>
+  )
+}
+
+function TransactionDetailDrawer({
+  transaction,
+  isOpen,
+  onClose,
+}: {
+  transaction: TransactionRow | null
+  isOpen: boolean
+  onClose: () => void
+}) {
+  if (!isOpen || !transaction) return null
+
+  return (
+    <>
+      {/* Overlay */}
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto bg-background shadow-lg">
+        <div className="flex items-center justify-between border-b p-4">
+          <h2 className="text-lg font-semibold">Detalhes da Transação</h2>
+          <button onClick={onClose} className="rounded-lg p-1 hover:bg-muted">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-6 p-6">
+          {/* Transação Info */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Informações da Transação
+            </h3>
+            <div className="space-y-2 rounded-lg bg-muted/30 p-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Data:</span>
+                <span className="font-medium">{formatDate(transaction.date)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Descrição:</span>
+                <span className="font-medium text-right">{transaction.description}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Valor Total:</span>
+                <span
+                  className={cn(
+                    'font-semibold',
+                    transaction.type === 'credit' ? 'text-[#1D9E75]' : 'text-[#E24B4A]',
+                  )}
+                >
+                  {transaction.type === 'credit' ? '+' : '−'}
+                  {formatCurrency(transaction.amount)}
+                </span>
+              </div>
+              {transaction.lease && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Contrato:</span>
+                  <span className="font-medium">{transaction.lease.tenantName}</span>
+                </div>
+              )}
+              {transaction.bankAccount && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Conta:</span>
+                  <span className="font-medium">{transaction.bankAccount.name}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Split Info */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground">Divisão Financeira</h3>
+            {transaction.splits.length === 0 ? (
+              <Badge variant="outline" className="border-amber-500 bg-amber-50 text-amber-700">
+                Não processada
+              </Badge>
+            ) : (
+              <div className="space-y-2">
+                {transaction.splits.map((split) => (
+                  <div key={split.id} className="flex justify-between rounded-lg bg-muted/30 p-3">
+                    <div>
+                      <p className="text-sm font-medium capitalize">
+                        {split.party === 'agency' ? 'Agência' : 'Proprietário'}
+                      </p>
+                      {split.description && (
+                        <p className="text-xs text-muted-foreground">{split.description}</p>
+                      )}
+                    </div>
+                    <p className="font-semibold">{formatCurrency(split.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function TransactionsPageClient({
   transactions,
   bankAccounts,
@@ -107,6 +239,8 @@ export function TransactionsPageClient({
 }: Props) {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionRow | null>(null)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
   function buildUrl(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString())
@@ -234,12 +368,20 @@ export function TransactionsPageClient({
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Conta</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tipo</th>
                   <th className="px-4 py-3 text-right font-medium text-muted-foreground">Valor</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Split</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {transactions.map((t) => (
-                  <tr key={t.id} className="transition-colors hover:bg-muted/30">
+                  <tr
+                    key={t.id}
+                    className="cursor-pointer transition-colors hover:bg-muted/30"
+                    onClick={() => {
+                      setSelectedTransaction(t)
+                      setIsDrawerOpen(true)
+                    }}
+                  >
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(t.date)}</td>
                     <td className="px-4 py-3">
                       <p className="max-w-xs truncate font-medium">{t.description}</p>
@@ -263,6 +405,9 @@ export function TransactionsPageClient({
                       {formatCurrency(t.amount)}
                     </td>
                     <td className="px-4 py-3">
+                      <SplitInfo splits={t.splits} />
+                    </td>
+                    <td className="px-4 py-3">
                       <StatusBadge status={t.status} />
                     </td>
                   </tr>
@@ -274,7 +419,14 @@ export function TransactionsPageClient({
           {/* Mobile cards */}
           <div className="space-y-3 md:hidden">
             {transactions.map((t) => (
-              <div key={t.id} className="rounded-xl border p-4">
+              <div
+                key={t.id}
+                className="cursor-pointer rounded-xl border p-4 transition-colors hover:bg-muted/30"
+                onClick={() => {
+                  setSelectedTransaction(t)
+                  setIsDrawerOpen(true)
+                }}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <StatusBadge status={t.status} />
                   <span
@@ -289,6 +441,9 @@ export function TransactionsPageClient({
                 </div>
                 <p className="mt-2 truncate font-medium">{t.description}</p>
                 {t.lease && <p className="text-sm text-muted-foreground">{t.lease.tenantName}</p>}
+                <div className="mt-3 border-t pt-2">
+                  <SplitInfo splits={t.splits} />
+                </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                   <span>{formatDate(t.date)}</span>
                   {t.bankAccount && (
@@ -330,6 +485,12 @@ export function TransactionsPageClient({
           )}
         </div>
       )}
+
+      <TransactionDetailDrawer
+        transaction={selectedTransaction}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+      />
     </>
   )
 }

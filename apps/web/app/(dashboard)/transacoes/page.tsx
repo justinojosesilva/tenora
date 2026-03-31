@@ -67,6 +67,7 @@ async function TransactionsSection({
       include: {
         bankAccount: { select: { name: true } },
         lease: { select: { tenantName: true } },
+        splits: { select: { id: true, party: true, amount: true, description: true } },
       },
       orderBy: { date: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
@@ -85,6 +86,12 @@ async function TransactionsSection({
     date: t.date.toISOString(),
     bankAccount: t.bankAccount ? { name: t.bankAccount.name } : null,
     lease: t.lease ? { tenantName: t.lease.tenantName } : null,
+    splits: t.splits.map((s) => ({
+      id: s.id,
+      party: s.party as 'agency' | 'owner',
+      amount: s.amount.toString(),
+      description: s.description,
+    })),
   }))
 
   return (
