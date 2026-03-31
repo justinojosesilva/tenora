@@ -1,7 +1,10 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
+import { createElement as h } from 'react'
 import { auth } from '@clerk/nextjs/server'
-import { prismaWithTenant } from '@tenora/db'
+import { db as rootDb, prismaWithTenant } from '@tenora/db'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+import { renderToStream } from '@react-pdf/renderer'
 
 type OwnerData = {
   name: string
@@ -59,35 +62,140 @@ function generateCsv(owner: OwnerData, charges: ChargeWithLease[]): string {
   return rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
 }
 
-function generateHtml(owner: OwnerData, charges: ChargeWithLease[], period: string): string {
+const styles = StyleSheet.create({
+  page: {
+    padding: 40,
+    fontFamily: 'Helvetica',
+    fontSize: 10,
+    color: '#333',
+  },
+  header: {
+    display: 'flex',
+    flexDirection: 'row',
+    marginBottom: 24,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  logoContainer: {
+    width: 60,
+    height: 60,
+  },
+  logo: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+  },
+  titleSection: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 10,
+    color: '#666',
+    marginBottom: 16,
+  },
+  ownerInfo: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 4,
+    marginBottom: 24,
+  },
+  ownerName: {
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  ownerField: {
+    marginBottom: 2,
+    fontSize: 9,
+  },
+  table: {
+    marginBottom: 24,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  tableHeader: {
+    display: 'flex',
+    flexDirection: 'row',
+    backgroundColor: '#1D9E75',
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1D9E75',
+  },
+  tableRow: {
+    display: 'flex',
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  tableRowAlternate: {
+    backgroundColor: '#fafafa',
+  },
+  tableRowTotal: {
+    backgroundColor: '#f0faf6',
+    borderTopWidth: 2,
+    borderTopColor: '#1D9E75',
+    fontWeight: 'bold',
+  },
+  tableCell: {
+    flex: 1,
+    padding: 8,
+    fontSize: 9,
+  },
+  tableCellSmall: {
+    flex: 0.7,
+    padding: 8,
+    fontSize: 9,
+  },
+  footer: {
+    marginTop: 32,
+    fontSize: 8,
+    color: '#999',
+    textAlign: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingTop: 12,
+  },
+})
+
+function generatePdfDocument(
+  owner: OwnerData,
+  charges: ChargeWithLease[],
+  period: string,
+  logoUrl?: string | null,
+) {
   let totalRepasse = 0
 
-  const rows = charges
-    .map((c) => {
-      const rentAmount = Number(c.lease.rentAmount)
-      const adminFeePct = Number(c.lease.adminFeePct)
-      const repasse = rentAmount - (rentAmount * adminFeePct) / 100
-      totalRepasse += repasse
+  const chargeRows = charges.map((c) => {
+    const rentAmount = Number(c.lease.rentAmount)
+    const adminFeePct = Number(c.lease.adminFeePct)
+    const repasse = rentAmount - (rentAmount * adminFeePct) / 100
+    totalRepasse += repasse
 
-      const month = c.paidAt
-        ? new Date(c.paidAt).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-        : (c.reference ?? '')
-      const property = [c.lease.property.address, c.lease.property.city].filter(Boolean).join(', ')
-      const paidAtStr = c.paidAt ? new Date(c.paidAt).toLocaleDateString('pt-BR') : ''
+    const month = c.paidAt
+      ? new Date(c.paidAt).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+      : (c.reference ?? '')
+    const property = [c.lease.property.address, c.lease.property.city].filter(Boolean).join(', ')
+    const paidAtStr = c.paidAt ? new Date(c.paidAt).toLocaleDateString('pt-BR') : ''
 
-      return `<tr>
-        <td>${escapeHtml(month)}</td>
-        <td>${escapeHtml(property)}</td>
-        <td>${escapeHtml(c.lease.tenantName)}</td>
-        <td>R$ ${rentAmount.toFixed(2)}</td>
-        <td>${adminFeePct.toFixed(2)}%</td>
-        <td>R$ ${repasse.toFixed(2)}</td>
-        <td>${paidAtStr}</td>
-      </tr>`
-    })
-    .join('\n')
+    return {
+      month,
+      property,
+      tenantName: c.lease.tenantName,
+      rentAmount,
+      adminFeePct,
+      repasse,
+      paidAtStr,
+    }
+  })
 
-  const emailRow = owner.email ? `<p>E-mail: ${escapeHtml(owner.email)}</p>` : ''
   const generatedAt = new Date().toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
@@ -96,61 +204,77 @@ function generateHtml(owner: OwnerData, charges: ChargeWithLease[], period: stri
     minute: '2-digit',
   })
 
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Extrato — ${escapeHtml(owner.name)}</title>
-<style>
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #333; margin: 40px; }
-  h1 { font-size: 18px; color: #1a1a1a; margin-bottom: 4px; }
-  .subtitle { color: #666; margin-bottom: 24px; }
-  .owner-info { background: #f5f5f5; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px; }
-  .owner-info p { margin: 2px 0; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #1D9E75; color: white; text-align: left; padding: 8px 12px; font-size: 11px; }
-  td { padding: 7px 12px; border-bottom: 1px solid #eee; }
-  tr:nth-child(even) td { background: #fafafa; }
-  .total-row td { font-weight: bold; background: #f0faf6; border-top: 2px solid #1D9E75; }
-  .footer { margin-top: 32px; font-size: 10px; color: #999; text-align: center; }
-  @media print { body { margin: 20px; } }
-</style>
-</head>
-<body>
-<h1>Tenora — Extrato de Repasses</h1>
-<p class="subtitle">Período: ${escapeHtml(period)}</p>
-<div class="owner-info">
-  <p><strong>${escapeHtml(owner.name)}</strong></p>
-  <p>CPF/CNPJ: ${escapeHtml(owner.cpfCnpj)}</p>
-  ${emailRow}
-</div>
-<table>
-  <thead>
-    <tr>
-      <th>Mês</th><th>Imóvel</th><th>Inquilino</th>
-      <th>Valor Bruto</th><th>Taxa Admin</th><th>Valor Líquido</th><th>Data Pgto.</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${rows}
-    <tr class="total-row">
-      <td colspan="5">Total</td>
-      <td>R$ ${totalRepasse.toFixed(2)}</td><td></td>
-    </tr>
-  </tbody>
-</table>
-<p class="footer">Gerado em ${generatedAt} — Tenora Gestão Imobiliária</p>
-</body>
-</html>`
-}
+  // Header elements
+  const headerElements = [
+    ...(logoUrl
+      ? [h(View, { style: styles.logoContainer }, h(Image, { src: logoUrl, style: styles.logo }))]
+      : []),
+    h(
+      View,
+      { style: styles.titleSection },
+      h(Text, { style: styles.title }, 'Tenora — Extrato de Repasses'),
+      h(Text, { style: styles.subtitle }, `Período: ${period}`),
+    ),
+  ]
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+  // Owner info elements
+  const ownerInfoElements = [
+    h(Text, { style: styles.ownerName }, owner.name),
+    h(Text, { style: styles.ownerField }, `CPF/CNPJ: ${owner.cpfCnpj}`),
+    ...(owner.email ? [h(Text, { style: styles.ownerField }, `E-mail: ${owner.email}`)] : []),
+  ]
+
+  // Table header row
+  const tableHeaderRow = h(
+    View,
+    { style: styles.tableHeader },
+    h(Text, { style: styles.tableCell }, 'Mês'),
+    h(Text, { style: [styles.tableCell, { flex: 1.5 }] }, 'Imóvel'),
+    h(Text, { style: styles.tableCell }, 'Inquilino'),
+    h(Text, { style: styles.tableCellSmall }, 'Valor Bruto'),
+    h(Text, { style: styles.tableCellSmall }, 'Taxa Admin'),
+    h(Text, { style: styles.tableCellSmall }, 'Valor Líquido'),
+    h(Text, { style: styles.tableCellSmall }, 'Data Pgto.'),
+  )
+
+  // Table rows
+  const tableRows = chargeRows.map((row, idx) =>
+    h(
+      View,
+      {
+        style: [styles.tableRow, ...(idx % 2 === 1 ? [styles.tableRowAlternate] : [])],
+      },
+      h(Text, { style: styles.tableCell }, row.month),
+      h(Text, { style: [styles.tableCell, { flex: 1.5 }] }, row.property),
+      h(Text, { style: styles.tableCell }, row.tenantName),
+      h(Text, { style: styles.tableCellSmall }, `R$ ${row.rentAmount.toFixed(2)}`),
+      h(Text, { style: styles.tableCellSmall }, `${row.adminFeePct.toFixed(2)}%`),
+      h(Text, { style: styles.tableCellSmall }, `R$ ${row.repasse.toFixed(2)}`),
+      h(Text, { style: styles.tableCellSmall }, row.paidAtStr),
+    ),
+  )
+
+  // Total row
+  const totalRow = h(
+    View,
+    { style: [styles.tableRow, styles.tableRowTotal] },
+    h(Text, { style: [styles.tableCell, { flex: 3.2 }] }, 'Total'),
+    h(Text, { style: styles.tableCellSmall }, `R$ ${totalRepasse.toFixed(2)}`),
+    h(Text, { style: styles.tableCellSmall }, ''),
+  )
+
+  return h(
+    Document,
+    {},
+    h(
+      Page,
+      { size: 'A4', style: styles.page },
+      h(View, { style: styles.header }, ...headerElements),
+      h(View, { style: styles.ownerInfo }, ...ownerInfoElements),
+      h(View, { style: styles.table }, tableHeaderRow, ...tableRows, totalRow),
+      h(Text, { style: styles.footer }, `Gerado em ${generatedAt} — Tenora Gestão Imobiliária`),
+    ),
+  )
 }
 
 export async function GET(request: NextRequest) {
@@ -167,7 +291,7 @@ export async function GET(request: NextRequest) {
 
   const db = prismaWithTenant(orgId)
 
-  const [owner, charges] = await Promise.all([
+  const [owner, charges, tenant] = await Promise.all([
     db.owner.findUnique({
       where: { id: ownerId, deletedAt: null },
       select: { name: true, cpfCnpj: true, email: true, phone: true },
@@ -197,6 +321,10 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { paidAt: 'desc' },
     }),
+    rootDb.tenant.findUnique({
+      where: { id: orgId },
+      select: { logo: true },
+    }),
   ])
 
   if (!owner) return NextResponse.json({ error: 'Proprietário não encontrado' }, { status: 404 })
@@ -209,11 +337,13 @@ export async function GET(request: NextRequest) {
   const period = periodParts.length > 0 ? periodParts.join(' ') : 'Todos os períodos'
 
   if (format === 'pdf') {
-    const html = generateHtml(owner, charges as ChargeWithLease[], period)
-    return new NextResponse(html, {
+    const pdfDoc = generatePdfDocument(owner, charges as ChargeWithLease[], period, tenant?.logo)
+    const stream = await renderToStream(pdfDoc)
+
+    return new Response(stream as unknown as BodyInit, {
       headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `attachment; filename="extrato-${ownerSlug}.html"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="extrato-${ownerSlug}.pdf"`,
       },
     })
   }
