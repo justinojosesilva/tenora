@@ -102,6 +102,30 @@ export class PluggyClientWrapper {
   }
 
   /**
+   * Fetch the first account for a given Pluggy item
+   * @param itemId The item ID to fetch accounts for
+   * @returns The first account, or null if none found
+   */
+  async fetchFirstAccount(
+    itemId: string,
+  ): Promise<{ id: string; name: string; number: string; subtype: string } | null> {
+    if (!this.client) {
+      throw new Error('Pluggy client not initialized')
+    }
+
+    try {
+      const accounts = await this.client.fetchAccounts(itemId)
+      const first = accounts.results[0]
+      if (!first) return null
+      return { id: first.id, name: first.name, number: first.number, subtype: first.subtype }
+    } catch (error) {
+      throw new Error(
+        `Pluggy fetchAccounts failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  /**
    * Fetch all transactions for a given account from Pluggy
    * @param accountId The account ID to fetch transactions for
    * @returns An array of transactions

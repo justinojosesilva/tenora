@@ -20,6 +20,7 @@ import {
   ScrollText,
   CreditCard,
   Receipt,
+  Landmark,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ const NAV_GROUPS = [
       { label: 'Fluxo de Caixa', href: '/fluxo-de-caixa', icon: Wallet },
       { label: 'DRE', href: '/dre', icon: BarChart3 },
       { label: 'Transações', href: '/transacoes', icon: ArrowLeftRight },
+      { label: 'Contas Bancárias', href: '/contas-bancarias', icon: Landmark },
     ],
   },
   {

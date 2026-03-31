@@ -57,6 +57,52 @@ export const bankAccountRouter: TRPCRouter = router({
       })
     }),
 
+  connectFromPluggy: protectedProcedure
+    .use(requireRole(UserRole.admin))
+    .input(
+      z.object({
+        pluggyItemId: z.string().min(1),
+        name: z.string().min(1).max(100),
+        bankCode: z.string().min(1).max(10),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const pluggy = getPluggyClient(ctx.redis)
+
+      const account = await pluggy.fetchFirstAccount(input.pluggyItemId)
+      if (!account) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Nenhuma conta encontrada para este item Pluggy',
+        })
+      }
+
+      const accountType = account.subtype === 'SAVINGS_ACCOUNT' ? 'savings' : 'checking'
+
+      return ctx.db.$transaction(async (tx) => {
+        const bankAccount = await tx.bankAccount.create({
+          data: {
+            tenantId: ctx.tenantId,
+            name: input.name,
+            bankCode: input.bankCode,
+            accountType,
+            accountNumber: account.number || undefined,
+          },
+        })
+
+        await tx.bankConnection.create({
+          data: {
+            bankAccountId: bankAccount.id,
+            pluggyItemId: input.pluggyItemId,
+            pluggyAccountId: account.id,
+            status: 'active',
+          },
+        })
+
+        return bankAccount
+      })
+    }),
+
   getConnectToken: protectedProcedure.use(requireRole(UserRole.admin)).mutation(async ({ ctx }) => {
     try {
       const pluggy = getPluggyClient(ctx.redis)
