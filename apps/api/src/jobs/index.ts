@@ -367,17 +367,66 @@ function createBankSyncWorker() {
             continue
           }
 
+          const txDate = new Date(pluggyTx.date)
+          const txAmount = pluggyTx.amount
+          const txType = pluggyTx.type.toLowerCase() as 'credit' | 'debit'
+
+          // Heuristic lease linking: for credit transactions, try to match with rent payments
+          let leaseId: string | null = null
+          if (txType === 'credit') {
+            const leases = await tenantDb.lease.findMany({
+              where: {
+                status: 'active',
+                deletedAt: null,
+              },
+            })
+
+            for (const lease of leases) {
+              // Check if amount matches lease rent amount (within 1 cent tolerance)
+              const amountMatches = Math.abs(Number(lease.rentAmount) - txAmount) < 0.01
+
+              if (amountMatches) {
+                // Check if transaction date is within a reasonable window relative to due day
+                const txMonth = txDate.getMonth()
+                const txYear = txDate.getFullYear()
+
+                // Calculate expected due dates: current month and previous month
+                const dueDayThisMonth = new Date(txYear, txMonth, lease.dueDayOfMonth)
+                const dueDayLastMonth = new Date(txYear, txMonth - 1, lease.dueDayOfMonth)
+
+                // Calculate days relative to due dates
+                const daysBeforeThisMonth = Math.ceil(
+                  (dueDayThisMonth.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24),
+                )
+                const daysAfterLastMonth = Math.ceil(
+                  (txDate.getTime() - dueDayLastMonth.getTime()) / (1000 * 60 * 60 * 24),
+                )
+
+                // Match if within ±30 days of any expected due date (early/late payment window)
+                if (
+                  (daysBeforeThisMonth >= -30 && daysBeforeThisMonth <= 30) ||
+                  (daysAfterLastMonth >= 0 && daysAfterLastMonth <= 30)
+                ) {
+                  leaseId = lease.id
+                  break // Take the first matching lease
+                }
+              }
+            }
+          }
+
           // Map Pluggy transaction to app transaction
           await tenantDb.transaction.create({
             data: {
               tenantId,
               bankAccountId: bankConnection.bankAccountId || null,
+              leaseId,
               pluggyTransactionId: pluggyTx.id,
               description: pluggyTx.description || pluggyTx.descriptionRaw || '',
-              amount: pluggyTx.amount,
-              type: pluggyTx.type.toLowerCase() as 'credit' | 'debit',
-              date: new Date(pluggyTx.date),
+              amount: txAmount,
+              type: txType,
+              date: txDate,
               origin: 'bank_sync',
+              status: 'pending',
             },
           })
           createdCount++
