@@ -98,6 +98,10 @@ model Tenant {
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
 
+  // Company info
+  logo         String?   // R2 URL to company logo
+  contactEmail String?   @map("contact_email")
+
   // Stripe
   stripeCustomerId     String? @map("stripe_customer_id")
   stripeSubscriptionId String? @map("stripe_subscription_id")

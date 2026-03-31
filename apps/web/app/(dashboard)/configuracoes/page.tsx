@@ -15,6 +15,10 @@ export default async function SettingsPage() {
       plan: true,
       stripeCustomerId: true,
       stripeSubscriptionId: true,
+      name: true,
+      cnpj: true,
+      logo: true,
+      contactEmail: true,
     },
   })
 
@@ -25,7 +29,7 @@ export default async function SettingsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Configurações</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gerencie a sua assinatura e preferências da imobiliária.
+          Gerencie as informações, assinatura e integrações da sua imobiliária.
         </p>
       </div>
 
@@ -33,6 +37,10 @@ export default async function SettingsPage() {
         currentPlan={tenant.plan as 'starter' | 'pro' | 'scale'}
         hasStripeCustomer={!!tenant.stripeCustomerId}
         hasActiveSubscription={!!tenant.stripeSubscriptionId}
+        tenantName={tenant.name}
+        tenantCnpj={tenant.cnpj}
+        tenantLogo={tenant.logo}
+        tenantContactEmail={tenant.contactEmail}
       />
     </div>
   )

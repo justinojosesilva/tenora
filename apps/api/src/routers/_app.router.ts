@@ -10,6 +10,7 @@ import { chargesRouter } from './charges.router.js'
 import { pluggyRouter } from './pluggy.router.js'
 import { bankAccountRouter } from './bankAccount.router.js'
 import { splitRouter } from './split.router.js'
+import { settingsRouter } from './settings.router.js'
 
 export const appRouter: TRPCRouter = router({
   property: propertyRouter,
@@ -23,6 +24,7 @@ export const appRouter: TRPCRouter = router({
   pluggy: pluggyRouter,
   bankAccount: bankAccountRouter,
   split: splitRouter,
+  settings: settingsRouter,
 })
 
 export type AppRouter = typeof appRouter

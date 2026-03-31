@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { Loader2, ExternalLink } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { createPortalSessionAction } from '../../billing/actions'
+import { useState } from 'react'
+import { Tabs } from '@/components/ui/tabs'
+import { GeneralTab } from './tabs/general-tab'
+import { SubscriptionTab } from './tabs/subscription-tab'
+import { BankIntegrationTab } from './tabs/bank-integration-tab'
 
 type Plan = 'starter' | 'pro' | 'scale'
 
@@ -12,93 +12,51 @@ type Props = {
   currentPlan: Plan
   hasStripeCustomer: boolean
   hasActiveSubscription: boolean
-}
-
-const PLAN_NAMES: Record<Plan, string> = {
-  starter: 'Starter',
-  pro: 'Pro',
-  scale: 'Scale',
+  tenantName: string
+  tenantCnpj: string | null
+  tenantLogo: string | null
+  tenantContactEmail: string | null
 }
 
 export function SettingsPageClient({
   currentPlan,
   hasStripeCustomer,
   hasActiveSubscription,
+  tenantName,
+  tenantCnpj,
+  tenantLogo,
+  tenantContactEmail,
 }: Props) {
-  const [portalPending, setPortalPending] = useState(false)
-  const [, startTransition] = useTransition()
-
-  function handleOpenPortal() {
-    setPortalPending(true)
-    startTransition(async () => {
-      await createPortalSessionAction()
-      setPortalPending(false)
-    })
-  }
+  const [activeTab, setActiveTab] = useState('geral')
 
   return (
-    <div className="space-y-8">
-      {/* Assinatura */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Assinatura</CardTitle>
-          <CardDescription>Gerencie o plano da sua imobiliária</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border bg-muted/40 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Plano atual</p>
-                <p className="mt-0.5 text-xl font-bold">{PLAN_NAMES[currentPlan]}</p>
-                {!hasActiveSubscription && (
-                  <p className="mt-1 text-xs text-muted-foreground">Sem assinatura ativa</p>
-                )}
-              </div>
-              {hasStripeCustomer && hasActiveSubscription && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenPortal}
-                  disabled={portalPending}
-                >
-                  {portalPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                  )}
-                  Gerenciar assinatura
-                </Button>
-              )}
-            </div>
-          </div>
-          {!hasActiveSubscription && (
-            <p className="text-sm text-muted-foreground">
-              Acesse a{' '}
-              <a href="/dashboard/billing" className="font-medium underline">
-                página de assinatura
-              </a>{' '}
-              para escolher um plano.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+    <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col">
+      <Tabs.List className="grid grid-cols-3">
+        <Tabs.Tab value="geral">Geral</Tabs.Tab>
+        <Tabs.Tab value="assinatura">Assinatura</Tabs.Tab>
+        <Tabs.Tab value="banco">Integ. Bancária</Tabs.Tab>
+      </Tabs.List>
 
-      {/* Informações da conta */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Informações da conta</CardTitle>
-          <CardDescription>Detalhes básicos da sua imobiliária</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-sm text-muted-foreground">
-            Para gerenciar membros da equipe, acesse{' '}
-            <a href="/dashboard/settings/members" className="font-medium underline">
-              Membros
-            </a>
-            .
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      <Tabs.Panel value="geral" className="mt-6">
+        <GeneralTab
+          initialName={tenantName}
+          initialCnpj={tenantCnpj}
+          initialLogo={tenantLogo}
+          initialContactEmail={tenantContactEmail}
+        />
+      </Tabs.Panel>
+
+      <Tabs.Panel value="assinatura" className="mt-6">
+        <SubscriptionTab
+          currentPlan={currentPlan}
+          hasStripeCustomer={hasStripeCustomer}
+          hasActiveSubscription={hasActiveSubscription}
+        />
+      </Tabs.Panel>
+
+      <Tabs.Panel value="banco" className="mt-6">
+        <BankIntegrationTab />
+      </Tabs.Panel>
+    </Tabs.Root>
   )
 }
