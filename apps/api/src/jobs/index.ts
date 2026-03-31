@@ -5,6 +5,7 @@ import {
   QUEUE_NAMES,
   redisConnection,
   dlqQueue,
+  bankSyncQueue,
   notificationSendQueue,
   billingGenerateQueue,
   type BankSyncJobData,
@@ -252,6 +253,57 @@ function buildExpiryEmailHtml(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Cron: sincronização periódica de transações bancárias (a cada 6h)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enfileira um job bank-sync para cada BankConnection ativa.
+ * Usa jobId único por slot de 6h para evitar duplicatas de sincronização simultânea.
+ */
+async function runBankSyncCron() {
+  const connections = await db.bankConnection.findMany({
+    where: { status: 'active' },
+    include: { bankAccount: { select: { tenantId: true } } },
+  })
+
+  const slotMs = 6 * 60 * 60 * 1000
+  const slot = Math.floor(Date.now() / slotMs) * slotMs
+
+  for (const connection of connections) {
+    await bankSyncQueue.add(
+      'bank-sync',
+      {
+        tenantId: connection.bankAccount.tenantId,
+        bankConnectionId: connection.id,
+      },
+      { jobId: `bank-sync-${connection.id}-${slot}` },
+    )
+  }
+
+  console.log(`[bank:sync] cron | ${connections.length} conexões enfileiradas`)
+}
+
+async function scheduleBankSyncCron() {
+  const repeatableJobs = await bankSyncQueue.getRepeatableJobs()
+  for (const job of repeatableJobs) {
+    if (job.name === 'bank-sync-cron') {
+      await bankSyncQueue.removeRepeatableByKey(job.key)
+    }
+  }
+
+  await bankSyncQueue.add(
+    'bank-sync-cron',
+    { tenantId: 'system', bankConnectionId: 'system' },
+    {
+      repeat: { pattern: '0 */6 * * *', utc: true },
+      jobId: 'bank-sync-cron',
+    },
+  )
+
+  console.log('[jobs] Cron bank-sync-cron agendado: 0 */6 * * * (UTC)')
+}
+
+// ---------------------------------------------------------------------------
 // Workers
 // ---------------------------------------------------------------------------
 
@@ -259,6 +311,13 @@ function createBankSyncWorker() {
   const worker = new Worker<BankSyncJobData>(
     QUEUE_NAMES.BANK_SYNC,
     async (job) => {
+      if (job.name === 'bank-sync-cron') {
+        console.log(`[bank:sync] job ${job.id} | cron iniciado`)
+        await runBankSyncCron()
+        console.log(`[bank:sync] job ${job.id} | cron concluído`)
+        return
+      }
+
       console.log(
         `[bank:sync] job ${job.id} | tenant=${job.data.tenantId} bankConnection=${job.data.bankConnectionId}`,
       )
@@ -521,6 +580,7 @@ export async function startWorkers() {
       .join(', ')}`,
   )
 
+  await scheduleBankSyncCron()
   await scheduleDailyLeaseExpiryScan()
   await scheduleMonthlyBillingGenerate()
 
