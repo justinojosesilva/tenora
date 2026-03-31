@@ -14,6 +14,16 @@ interface PluggyWebhookEvent {
   data?: Record<string, unknown>
 }
 
+// Mapeamento de evento Pluggy → status da BankConnection
+const PLUGGY_ITEM_EVENT_STATUS: Record<string, string> = {
+  'item/updated': 'active',
+  'item/login_succeeded': 'active',
+  'item/error': 'error',
+  'item/login_error': 'error',
+  'item/outdated': 'outdated',
+  'item/waiting_user_input': 'waiting_user_input',
+}
+
 interface OrganizationMembershipCreatedPayload {
   type: 'organizationMembership.created'
   data: {
@@ -390,19 +400,36 @@ export async function registerWebhooks(server: FastifyInstance) {
 
     const tenantId = bankConnection.bankAccount.tenantId
 
-    // 4. Enfileirar job bank-sync para processamento assíncrono
-    await bankSyncQueue.add('bank-sync', {
-      tenantId,
-      bankConnectionId: bankConnection.id,
-    })
+    // 4a. Eventos de item/* → atualizar status da BankConnection
+    if (body.event.startsWith('item/')) {
+      const newStatus = PLUGGY_ITEM_EVENT_STATUS[body.event] ?? 'active'
+      await rootDb.bankConnection.update({
+        where: { id: bankConnection.id },
+        data: { status: newStatus },
+      })
+      server.log.info({
+        msg: 'BankConnection.status atualizado via webhook',
+        bankConnectionId: bankConnection.id,
+        tenantId,
+        event: body.event,
+        newStatus,
+      })
+    }
 
-    server.log.info({
-      msg: 'Job bank-sync enfileirado',
-      tenantId,
-      bankConnectionId: bankConnection.id,
-      event: body.event,
-      pluggyItemId: body.itemId,
-    })
+    // 4b. Eventos de transactions/* → enfileirar job bank-sync
+    if (body.event.startsWith('transactions/')) {
+      await bankSyncQueue.add('bank-sync', {
+        tenantId,
+        bankConnectionId: bankConnection.id,
+      })
+      server.log.info({
+        msg: 'Job bank-sync enfileirado',
+        tenantId,
+        bankConnectionId: bankConnection.id,
+        event: body.event,
+        pluggyItemId: body.itemId,
+      })
+    }
 
     // 5. Retornar 200 imediatamente (processamento é assíncrono)
     return reply.status(200).send({ received: true })
