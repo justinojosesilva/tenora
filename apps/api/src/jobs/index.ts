@@ -6,6 +6,7 @@ import {
   redisConnection,
   dlqQueue,
   bankSyncQueue,
+  financialRepasseQueue,
   notificationSendQueue,
   billingGenerateQueue,
   type BankSyncJobData,
@@ -15,6 +16,7 @@ import {
 } from '@tenora/queues'
 import { db, prismaWithTenant } from '@tenora/db'
 import { getPluggyClient } from '../lib/pluggy-client.js'
+import { calculate } from '../services/split.service.js'
 import Redis from 'ioredis'
 
 // ---------------------------------------------------------------------------
@@ -373,12 +375,18 @@ function createBankSyncWorker() {
 
           // Heuristic lease linking: for credit transactions, try to match with rent payments
           let leaseId: string | null = null
+          let matchedLease: {
+            id: string
+            dueDayOfMonth: number
+            property: { ownerId: string | null }
+          } | null = null
           if (txType === 'credit') {
             const leases = await tenantDb.lease.findMany({
               where: {
                 status: 'active',
                 deletedAt: null,
               },
+              include: { property: { select: { ownerId: true } } },
             })
 
             for (const lease of leases) {
@@ -408,6 +416,7 @@ function createBankSyncWorker() {
                   (daysAfterLastMonth >= 0 && daysAfterLastMonth <= 30)
                 ) {
                   leaseId = lease.id
+                  matchedLease = lease
                   break // Take the first matching lease
                 }
               }
@@ -415,7 +424,7 @@ function createBankSyncWorker() {
           }
 
           // Map Pluggy transaction to app transaction
-          await tenantDb.transaction.create({
+          const newTx = await tenantDb.transaction.create({
             data: {
               tenantId,
               bankAccountId: bankConnection.bankAccountId || null,
@@ -430,6 +439,20 @@ function createBankSyncWorker() {
             },
           })
           createdCount++
+
+          // Enfileira repasse financeiro quando transação está vinculada a contrato
+          if (leaseId && matchedLease?.property.ownerId) {
+            await financialRepasseQueue.add(
+              'financial-repasse',
+              {
+                tenantId,
+                transactionId: newTx.id,
+                ownerId: matchedLease.property.ownerId,
+                amount: txAmount,
+              },
+              { jobId: `repasse-${pluggyTx.id}` }, // dedup por transação Pluggy
+            )
+          }
         }
 
         // Update lastSyncedAt timestamp
@@ -579,10 +602,83 @@ function createFinancialRepasseWorker() {
   const worker = new Worker<FinancialRepasseJobData>(
     QUEUE_NAMES.FINANCIAL_REPASSE,
     async (job) => {
+      const { tenantId, transactionId, ownerId } = job.data
       console.log(
-        `[financial:repasse] job ${job.id} | tenant=${job.data.tenantId} owner=${job.data.ownerId} amount=${job.data.amount}`,
+        `[financial:repasse] job ${job.id} | tenant=${tenantId} transaction=${transactionId} owner=${ownerId}`,
       )
-      // TODO T-2x: implementar repasse financeiro
+
+      const tenantDb = prismaWithTenant(tenantId)
+
+      const transaction = await tenantDb.transaction.findUnique({
+        where: { id: transactionId },
+        include: {
+          lease: {
+            include: { property: { select: { ownerId: true } } },
+          },
+          splits: true,
+        },
+      })
+
+      if (!transaction) {
+        console.warn(`[financial:repasse] job ${job.id} | transaction ${transactionId} not found`)
+        return
+      }
+
+      if (!transaction.lease) {
+        console.warn(
+          `[financial:repasse] job ${job.id} | transaction ${transactionId} has no linked lease, skipping`,
+        )
+        return
+      }
+
+      // Idempotência: pula se o split já foi aplicado
+      if (transaction.splits.length > 0) {
+        console.log(
+          `[financial:repasse] job ${job.id} | split já existe para transaction ${transactionId}, skipping`,
+        )
+        return
+      }
+
+      const { agency, owner } = calculate(transaction, transaction.lease)
+      const propertyOwnerId = transaction.lease.property.ownerId
+
+      await tenantDb.$transaction(async (tx) => {
+        await tx.transactionSplit.createMany({
+          data: [
+            {
+              tenantId,
+              transactionId,
+              party: 'agency',
+              amount: agency,
+              description: 'Taxa de administração',
+            },
+            {
+              tenantId,
+              transactionId,
+              party: 'owner',
+              amount: owner,
+              description: 'Repasse ao proprietário',
+            },
+          ],
+        })
+
+        if (propertyOwnerId) {
+          await tx.ownerAccount.upsert({
+            where: { ownerId: propertyOwnerId },
+            update: { balance: { increment: owner } },
+            create: { tenantId, ownerId: propertyOwnerId, balance: owner },
+          })
+        }
+
+        await tx.transaction.update({
+          where: { id: transactionId },
+          data: { status: 'reviewed' },
+        })
+      })
+
+      console.log(
+        `[financial:repasse] job ${job.id} | repasse concluído: agency=${agency} owner=${owner} transaction=${transactionId}`,
+      )
     },
     { connection: redisConnection, settings: workerSettings },
   )
