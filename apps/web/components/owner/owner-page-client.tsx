@@ -88,7 +88,8 @@ export function OwnerPageClient({ owners, canEdit, canDelete, total, page, total
             {total} {total === 1 ? 'proprietário' : 'proprietários'}
           </p>
 
-          <div className="overflow-hidden rounded-xl border">
+          {/* Desktop table */}
+          <div className="hidden overflow-hidden rounded-xl border md:block">
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/40">
                 <tr>
@@ -96,9 +97,7 @@ export function OwnerPageClient({ owners, canEdit, canDelete, total, page, total
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                     CPF/CNPJ
                   </th>
-                  <th className="hidden px-4 py-3 text-left font-medium text-muted-foreground md:table-cell">
-                    E-mail
-                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">E-mail</th>
                   <th className="px-4 py-3 text-center font-medium text-muted-foreground">
                     Imóveis
                   </th>
@@ -120,9 +119,7 @@ export function OwnerPageClient({ owners, canEdit, canDelete, total, page, total
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                         {formatCpfCnpj(o.cpfCnpj)}
                       </td>
-                      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                        {o.email ?? '—'}
-                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{o.email ?? '—'}</td>
                       <td className="px-4 py-3 text-center">
                         <Badge variant="outline">{o.propertiesCount}</Badge>
                       </td>
@@ -141,6 +138,45 @@ export function OwnerPageClient({ owners, canEdit, canDelete, total, page, total
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="space-y-3 md:hidden">
+            {owners.map((o) => {
+              const balanceNum = parseFloat(o.balance)
+              return (
+                <div
+                  key={o.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openEdit(o)}
+                  onKeyDown={(e) => e.key === 'Enter' && openEdit(o)}
+                  className="cursor-pointer rounded-xl border p-4 transition-colors hover:bg-muted/30"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="font-medium">{o.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatCpfCnpj(o.cpfCnpj)}</p>
+                    </div>
+                    <span
+                      className={`text-right font-semibold ${
+                        balanceNum > 0 ? 'text-green-600' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {balanceNum.toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      })}
+                    </span>
+                  </div>
+                  {o.email && <p className="mt-2 text-sm text-muted-foreground">{o.email}</p>}
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Imóveis</span>
+                    <Badge variant="outline">{o.propertiesCount}</Badge>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
           {totalPages > 1 && (
