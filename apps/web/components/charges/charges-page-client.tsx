@@ -11,6 +11,7 @@ import {
   markAsPaidAction,
   cancelChargeAction,
   generatePixAction,
+  generateBoletoAction,
 } from '@/app/(dashboard)/cobrancas/actions'
 import { trackPaymentReceived } from '@/lib/analytics'
 
@@ -26,6 +27,8 @@ export type ChargeRow = {
   type: 'pix' | 'boleto' | 'transfer'
   pixCode: string | null
   qrCodeImage: string | null
+  boletoCode: string | null
+  boletoUrl: string | null
   asaasChargeId: string | null
   lease: {
     tenantName: string
@@ -190,6 +193,129 @@ function PIXModal({
   )
 }
 
+type BoletoModalProps = {
+  chargeId: string
+  dueDate: string
+  initialBoletoCode?: string | null
+  initialBoletoUrl?: string | null
+  onClose: () => void
+  onBoletoGenerated?: (boletoCode: string, boletoUrl: string) => void
+}
+
+function BoletoModal({
+  chargeId,
+  dueDate,
+  initialBoletoCode,
+  initialBoletoUrl,
+  onClose,
+  onBoletoGenerated,
+}: BoletoModalProps) {
+  const [boletoCode, setBoletoCode] = useState<string | null>(initialBoletoCode ?? null)
+  const [boletoUrl, setBoletoUrl] = useState<string | null>(initialBoletoUrl ?? null)
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const generateBoleto = () => {
+    setError(null)
+    startTransition(async () => {
+      const result = await generateBoletoAction(chargeId)
+      if (result?.error) {
+        setError(result.error)
+      } else if (result?.boletoCode && result?.boletoUrl) {
+        setBoletoCode(result.boletoCode)
+        setBoletoUrl(result.boletoUrl)
+        onBoletoGenerated?.(result.boletoCode, result.boletoUrl)
+      }
+    })
+  }
+
+  const copyToClipboard = () => {
+    if (boletoCode) {
+      navigator.clipboard.writeText(boletoCode).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+    }
+  }
+
+  if (!boletoCode || !boletoUrl) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="w-full max-w-sm rounded-xl border bg-background p-6 shadow-xl">
+          <h2 className="mb-4 text-base font-semibold">Gerar Boleto</h2>
+          {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+          <p className="mb-4 text-sm text-muted-foreground">
+            Clique em &quot;Gerar Boleto&quot; para criar um novo boleto para esta cobrança.
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="button" onClick={generateBoleto} disabled={isPending} className="flex-1">
+              {isPending ? 'Gerando…' : 'Gerar Boleto'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-sm rounded-xl border bg-background p-6 shadow-xl">
+        <h2 className="mb-4 text-base font-semibold">Boleto Gerado</h2>
+
+        {/* Due date */}
+        <div className="mb-4">
+          <p className="text-sm text-muted-foreground">
+            <strong>Vencimento:</strong> {formatDate(dueDate)}
+          </p>
+        </div>
+
+        {/* Boleto code */}
+        {boletoCode && (
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium">Linha digitável:</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={boletoCode}
+                className="flex-1 rounded-lg border bg-muted px-3 py-2 text-xs font-mono"
+              />
+              <Button size="sm" variant="outline" onClick={copyToClipboard}>
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            {copied && <p className="mt-1 text-xs text-green-600">Copiado!</p>}
+          </div>
+        )}
+
+        {/* PDF link */}
+        {boletoUrl && (
+          <div className="mb-4">
+            <a
+              href={boletoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline"
+            >
+              📄 Baixar PDF do Boleto
+            </a>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Fechar
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type MarkPaidModalProps = {
   chargeId: string
   amount: string
@@ -284,6 +410,7 @@ export function ChargesPageClient({
   const [markPaidType, setMarkPaidType] = useState<'pix' | 'boleto' | 'transfer'>('pix')
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [pixModalId, setPixModalId] = useState<string | null>(null)
+  const [boletoModalId, setBoletoModalId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   function buildTabUrl(tabKey: string) {
@@ -336,6 +463,20 @@ export function ChargesPageClient({
               initialPixCode={charge?.pixCode ?? null}
               initialQrCode={charge?.qrCodeImage ?? null}
               onClose={() => setPixModalId(null)}
+            />
+          )
+        })()}
+
+      {boletoModalId &&
+        (() => {
+          const charge = charges.find((c) => c.id === boletoModalId)
+          return (
+            <BoletoModal
+              chargeId={boletoModalId}
+              dueDate={charge?.dueDate ?? new Date().toISOString()}
+              initialBoletoCode={charge?.boletoCode ?? null}
+              initialBoletoUrl={charge?.boletoUrl ?? null}
+              onClose={() => setBoletoModalId(null)}
             />
           )
         })()}
@@ -460,6 +601,15 @@ export function ChargesPageClient({
                                   {c.pixCode ? 'Ver PIX' : 'Gerar PIX'}
                                 </Button>
                               )}
+                              {c.type === 'boleto' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setBoletoModalId(c.id)}
+                                >
+                                  {c.boletoCode ? 'Ver Boleto' : 'Gerar Boleto'}
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" onClick={() => openMarkPaid(c)}>
                                 Marcar pago
                               </Button>
@@ -511,6 +661,16 @@ export function ChargesPageClient({
                         onClick={() => setPixModalId(c.id)}
                       >
                         {c.pixCode ? 'Ver PIX' : 'Gerar PIX'}
+                      </Button>
+                    )}
+                    {c.type === 'boleto' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setBoletoModalId(c.id)}
+                      >
+                        {c.boletoCode ? 'Ver Boleto' : 'Gerar Boleto'}
                       </Button>
                     )}
                     <div className="flex gap-2">

@@ -7,6 +7,7 @@ import { prismaWithTenant } from '@tenora/db'
 const MARK_PAID_ROLES = new Set(['admin', 'financeiro'])
 const CANCEL_ROLES = new Set(['admin', 'operacional'])
 const GENERATE_PIX_ROLES = new Set(['admin', 'financeiro'])
+const GENERATE_BOLETO_ROLES = new Set(['admin', 'financeiro'])
 
 async function resolveRole(): Promise<{ orgId: string; role: string } | { error: string }> {
   const { orgId, sessionClaims, orgRole } = await auth()
@@ -137,5 +138,40 @@ export async function generatePixAction(
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Erro ao gerar PIX' }
+  }
+}
+
+export async function generateBoletoAction(
+  id: string,
+): Promise<{ error?: string; boletoCode?: string; boletoUrl?: string }> {
+  const resolved = await resolveRole()
+  if ('error' in resolved) return { error: resolved.error }
+  const { role } = resolved
+
+  if (!GENERATE_BOLETO_ROLES.has(role)) return { error: 'Sem permissão para gerar Boleto' }
+
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    const response = await fetch(`${apiUrl}/trpc/charges.generateBoleto`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      return { error: error?.message || 'Erro ao gerar Boleto' }
+    }
+
+    const result = await response.json()
+    revalidatePath('/cobrancas')
+    return {
+      boletoCode: result?.result?.data?.boletoCode ?? undefined,
+      boletoUrl: result?.result?.data?.boletoUrl ?? undefined,
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Erro ao gerar Boleto' }
   }
 }

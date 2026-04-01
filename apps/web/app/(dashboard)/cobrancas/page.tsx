@@ -68,6 +68,8 @@ async function ChargesSection({
           type: true,
           pixCode: true,
           qrCodeImage: true,
+          boletoCode: true,
+          boletoUrl: true,
           asaasChargeId: true,
           lease: {
             select: {
@@ -123,6 +125,8 @@ async function ChargesSection({
     type: c.type,
     pixCode: c.pixCode ?? null,
     qrCodeImage: c.qrCodeImage ?? null,
+    boletoCode: c.boletoCode ?? null,
+    boletoUrl: c.boletoUrl ?? null,
     asaasChargeId: c.asaasChargeId ?? null,
     lease: {
       tenantName: c.lease.tenantName,
