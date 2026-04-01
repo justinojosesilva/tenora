@@ -183,4 +183,49 @@ export const chargesRouter: TRPCRouter = router({
 
       return updated
     }),
+
+  generatePix: protectedProcedure
+    .use(requireRole(UserRole.admin, UserRole.financeiro))
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const charge = await ctx.db.billingCharge.findUnique({
+        where: { id: input.id },
+        include: { lease: true },
+      })
+      if (!charge) throw new TRPCError({ code: 'NOT_FOUND', message: 'Cobrança não encontrada' })
+
+      // Error if already paid
+      if (charge.status === 'paid') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Cobrança já paga não pode gerar novo PIX',
+        })
+      }
+
+      // Idempotence: if PIX already generated, return existing
+      if (charge.pixCode && charge.asaasChargeId) {
+        return charge
+      }
+
+      // Generate PIX via Asaas
+      const asaas = getAsaasClient()
+      const pix = await asaas.createPix({
+        description: `Aluguel - ${charge.reference || `Vencimento ${charge.dueDate.toLocaleDateString('pt-BR')}`}`,
+        value: Number(charge.amount),
+        dueDate: charge.dueDate.toISOString().split('T')[0]!,
+      })
+
+      // Save PIX data
+      const updated = await ctx.db.billingCharge.update({
+        where: { id: input.id },
+        data: {
+          asaasChargeId: pix.id,
+          pixCode: pix.pixCopyPaste || '',
+          ...(pix.pixQrCode && { qrCodeImage: pix.pixQrCode }),
+        },
+        include: { lease: true },
+      })
+
+      return updated
+    }),
 })

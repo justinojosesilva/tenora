@@ -382,6 +382,7 @@ model BillingCharge {
   status      BillingStatus @default(pending)
   type        BillingType   @default(pix)
   pixCode     String?       @map("pix_code")
+  qrCodeImage String?       @map("qr_code_image")
   boletoCode  String?       @map("boleto_code")
   boletoUrl   String?       @map("boleto_url")
   asaasChargeId String?     @map("asaas_charge_id") @unique

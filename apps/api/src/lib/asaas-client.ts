@@ -11,6 +11,14 @@ export interface CreateBoletoPayload {
   notificationDisabled?: boolean
 }
 
+export interface CreatePixPayload {
+  customer?: string
+  description?: string
+  value: number
+  dueDate: string
+  notificationDisabled?: boolean
+}
+
 export interface BoletoResponse {
   id: string
   customer?: string
@@ -46,6 +54,30 @@ export interface BoletoResponse {
   updatedAt?: string
   confirmedDate?: string
   deletedDate?: string
+}
+
+export interface PixResponse {
+  id: string
+  customer?: string
+  description?: string
+  value: number
+  dueDate: string
+  status: string
+  billingType: 'PIX'
+  pixQrCode?: string // QR code as string (base64 or URL)
+  pixCopyPaste?: string // PIX code for manual entry
+  invoiceUrl?: string
+  transactionReceiptUrl?: string
+  originalValue?: number
+  originalDueDate?: string
+  externalReference?: string
+  deleted?: boolean
+  estimated?: boolean
+  confirmed?: boolean
+  confirmedDate?: string
+  deletedDate?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export class AsaasClient {
@@ -97,6 +129,42 @@ export class AsaasClient {
     } catch (error) {
       throw new Error(
         `Failed to create boleto: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  /**
+   * Create a PIX payment
+   * @param payload Payment data including due date and amount
+   * @returns PIX response with QR code and copy-paste code
+   */
+  async createPix(payload: CreatePixPayload): Promise<PixResponse> {
+    try {
+      const response = await fetch(`${this.baseUrl}/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          accept: 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          ...payload,
+          billingType: 'PIX',
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(
+          `Asaas API error (${response.status}): ${error.message || response.statusText}`,
+        )
+      }
+
+      const data = (await response.json()) as PixResponse
+      return data
+    } catch (error) {
+      throw new Error(
+        `Failed to create PIX payment: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
   }
