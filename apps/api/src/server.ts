@@ -66,6 +66,23 @@ server.addHook('preHandler', async (request) => {
 
     Sentry.setUser({ id: auth.userId })
     Sentry.setTag('tenantId', auth.orgId)
+    Sentry.setTag('http.path', request.url)
+  }
+})
+
+// Hook: capturar erros críticos e enviar alertas para Slack
+server.addHook('onError', async (request, reply, error) => {
+  const { sendSentryErrorToSlack } = await import('./lib/sentry-slack-alert.js')
+  const auth = getAuth(request)
+
+  // Apenas enviar para Slack se for erro 5xx (crítico)
+  if (reply.statusCode >= 500) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorPath = request.url
+    const userId = auth?.userId
+    const tenantId = auth?.orgId
+
+    await sendSentryErrorToSlack('error', errorMessage, errorPath, userId, tenantId)
   }
 })
 
