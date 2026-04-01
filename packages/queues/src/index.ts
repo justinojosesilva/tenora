@@ -53,7 +53,8 @@ export interface BillingGenerateJobData {
 
 export interface FinancialRepasseJobData {
   tenantId: string
-  transactionId: string
+  transactionId?: string // banco → TransactionSplit (Pluggy)
+  chargeId?: string // cobrança → balance atualizado inline (Asaas)
   ownerId: string
   amount: number
 }

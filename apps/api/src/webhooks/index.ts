@@ -4,7 +4,7 @@ import { Webhook } from 'svix'
 import Stripe from 'stripe'
 import { db as rootDb } from '@tenora/db'
 import { UserRole } from '@prisma/client'
-import { bankSyncQueue, notificationSendQueue } from '@tenora/queues'
+import { bankSyncQueue, notificationSendQueue, financialRepasseQueue } from '@tenora/queues'
 
 // ── Pluggy Webhook Types ──────────────────────────────────────────────────────
 
@@ -500,13 +500,14 @@ export async function registerWebhooks(server: FastifyInstance) {
           return reply.status(200).send({ received: true })
         }
 
-        // Buscar BillingCharge pela asaasChargeId
+        // Buscar BillingCharge com dados do contrato e imóvel para cálculo de repasse
         const charge = await rootDb.billingCharge.findFirst({
           where: { asaasChargeId: payment.id },
           include: {
             lease: {
               include: {
                 tenant: { select: { id: true } },
+                property: { select: { ownerId: true } },
               },
             },
           },
@@ -520,20 +521,75 @@ export async function registerWebhooks(server: FastifyInstance) {
           return reply.status(200).send({ received: true })
         }
 
-        const tenantId = charge.lease.tenant.id
+        // Idempotência: ignorar se a cobrança já foi baixada
+        if (charge.status === 'paid') {
+          server.log.info({
+            msg: 'PAYMENT_RECEIVED ignorado — cobrança já está paga',
+            chargeId: charge.id,
+            asaasChargeId: payment.id,
+          })
+          return reply.status(200).send({ received: true })
+        }
 
-        // Enfileirar job de notificação de pagamento confirmado
-        // Nota: O worker de notificação construirá o email com os dados da cobrança
+        const tenantId = charge.lease.tenant.id
+        const rentAmount = Number(charge.lease.rentAmount)
+        const adminFeePct = Number(charge.lease.adminFeePct)
+        const repasse = rentAmount - (rentAmount * adminFeePct) / 100
+        const ownerId = charge.lease.property.ownerId
+        const paidAt = payment.confirmedDate ? new Date(payment.confirmedDate) : new Date()
+
+        // Baixar cobrança e atualizar saldo do proprietário em uma transação atômica
+        const { prismaWithTenant } = await import('@tenora/db')
+        const tenantDb = prismaWithTenant(tenantId)
+
+        await tenantDb.$transaction(async (tx) => {
+          await tx.billingCharge.update({
+            where: { id: charge.id },
+            data: {
+              status: 'paid',
+              paidAt,
+              paidAmount: payment.value,
+            },
+          })
+
+          if (ownerId) {
+            await tx.ownerAccount.upsert({
+              where: { ownerId },
+              update: { balance: { increment: repasse } },
+              create: { tenantId, ownerId, balance: repasse },
+            })
+          }
+        })
+
+        server.log.info({
+          msg: 'Cobrança baixada automaticamente via webhook',
+          tenantId,
+          chargeId: charge.id,
+          asaasChargeId: payment.id,
+          paidAmount: payment.value,
+          repasse,
+        })
+
+        // Enfileirar job financial-repasse (deduplicado por chargeId)
+        if (ownerId) {
+          await financialRepasseQueue.add(
+            'financial-repasse',
+            { tenantId, chargeId: charge.id, ownerId, amount: repasse },
+            { jobId: `repasse-charge-${charge.id}` },
+          )
+        }
+
+        // Enfileirar notificação de pagamento confirmado
         await notificationSendQueue.add('notification-send', {
           tenantId,
-          to: 'notification@tenora.app', // será substituído pelo worker com email real do tenant
+          to: 'notification@tenora.app',
           subject: 'Pagamento Confirmado',
           body: `Pagamento da cobrança ${charge.reference || charge.id} foi confirmado`,
           leaseId: charge.leaseId,
         })
 
         server.log.info({
-          msg: 'Job notification-send enfileirado para PAYMENT_RECEIVED',
+          msg: 'Jobs enfileirados para PAYMENT_RECEIVED',
           tenantId,
           chargeId: charge.id,
           asaasChargeId: payment.id,

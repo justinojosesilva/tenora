@@ -602,7 +602,23 @@ function createFinancialRepasseWorker() {
   const worker = new Worker<FinancialRepasseJobData>(
     QUEUE_NAMES.FINANCIAL_REPASSE,
     async (job) => {
-      const { tenantId, transactionId, ownerId } = job.data
+      const { tenantId, transactionId, chargeId, ownerId } = job.data
+
+      // Jobs originados de cobranças Asaas: balance já atualizado inline no webhook
+      if (!transactionId && chargeId) {
+        console.log(
+          `[financial:repasse] job ${job.id} | charge=${chargeId} tenant=${tenantId} owner=${ownerId} — balance atualizado inline`,
+        )
+        return
+      }
+
+      if (!transactionId) {
+        console.warn(
+          `[financial:repasse] job ${job.id} | transactionId ausente e chargeId não fornecido, ignorando`,
+        )
+        return
+      }
+
       console.log(
         `[financial:repasse] job ${job.id} | tenant=${tenantId} transaction=${transactionId} owner=${ownerId}`,
       )
