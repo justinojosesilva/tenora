@@ -56,7 +56,16 @@ async function ChargesSection({
     await Promise.all([
       db.billingCharge.findMany({
         where: baseWhere,
-        include: {
+        select: {
+          id: true,
+          leaseId: true,
+          amount: true,
+          dueDate: true,
+          paidAt: true,
+          paidAmount: true,
+          status: true,
+          reference: true,
+          type: true,
           lease: {
             select: {
               tenantName: true,
@@ -108,6 +117,7 @@ async function ChargesSection({
     paidAmount: c.paidAmount?.toString() ?? null,
     status: c.status as ChargeRow['status'],
     reference: c.reference,
+    type: c.type,
     lease: {
       tenantName: c.lease.tenantName,
       property: {

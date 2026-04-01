@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChargesStatusBadge, type ChargeStatus } from './charges-status-badge'
 import { markAsPaidAction, cancelChargeAction } from '@/app/(dashboard)/cobrancas/actions'
+import { trackPaymentReceived } from '@/lib/analytics'
 
 export type ChargeRow = {
   id: string
@@ -18,6 +19,7 @@ export type ChargeRow = {
   paidAmount: string | null
   status: ChargeStatus
   reference: string | null
+  type: 'pix' | 'boleto' | 'transfer'
   lease: {
     tenantName: string
     property: { address: string; city: string | null; owner: { name: string } | null }
@@ -76,10 +78,11 @@ function formatDate(iso: string) {
 type MarkPaidModalProps = {
   chargeId: string
   amount: string
+  chargeType: 'pix' | 'boleto' | 'transfer'
   onClose: () => void
 }
 
-function MarkPaidModal({ chargeId, amount, onClose }: MarkPaidModalProps) {
+function MarkPaidModal({ chargeId, amount, chargeType, onClose }: MarkPaidModalProps) {
   const [isPending, startTransition] = useTransition()
   const [paidAt, setPaidAt] = useState(() => new Date().toISOString().substring(0, 10))
   const [paidAmount, setPaidAmount] = useState(parseFloat(amount).toFixed(2))
@@ -93,6 +96,13 @@ function MarkPaidModal({ chargeId, amount, onClose }: MarkPaidModalProps) {
       if (result?.error) {
         setError(result.error)
       } else {
+        // Track payment_received event
+        trackPaymentReceived(
+          chargeId,
+          chargeType,
+          parseFloat(paidAmount),
+          new Date(paidAt).toISOString(),
+        )
         onClose()
       }
     })
@@ -156,6 +166,7 @@ export function ChargesPageClient({
   const searchParams = useSearchParams()
   const [markPaidId, setMarkPaidId] = useState<string | null>(null)
   const [markPaidAmount, setMarkPaidAmount] = useState<string>('0')
+  const [markPaidType, setMarkPaidType] = useState<'pix' | 'boleto' | 'transfer'>('pix')
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -173,6 +184,7 @@ export function ChargesPageClient({
   function openMarkPaid(charge: ChargeRow) {
     setMarkPaidId(charge.id)
     setMarkPaidAmount(charge.amount)
+    setMarkPaidType(charge.type)
   }
 
   function handleCancel(id: string) {
@@ -194,6 +206,7 @@ export function ChargesPageClient({
         <MarkPaidModal
           chargeId={markPaidId}
           amount={markPaidAmount}
+          chargeType={markPaidType}
           onClose={() => setMarkPaidId(null)}
         />
       )}
