@@ -139,6 +139,8 @@ server.get('/health', async () => {
   let redisStatus = 'disconnected'
   let pluggyStatus = 'disconnected'
   let pluggyEnv = 'unconfigured'
+  let asaasStatus = 'disconnected'
+  let asaasEnv = 'unconfigured'
 
   try {
     await db.$queryRaw`SELECT 1`
@@ -173,14 +175,35 @@ server.get('/health', async () => {
     })
   }
 
+  // Validar configuração do Asaas
+  const asaasApiKey = process.env.ASAAS_API_KEY
+  const asaasApiEnv = process.env.ASAAS_ENV
+  const asaasWebhookToken = process.env.ASAAS_WEBHOOK_TOKEN
+  asaasEnv = asaasApiEnv || 'unconfigured'
+
+  if (asaasApiKey && asaasApiEnv && asaasWebhookToken) {
+    asaasStatus = 'connected'
+  } else {
+    server.log.warn({
+      msg: 'Asaas configuration incomplete',
+      hasApiKey: !!asaasApiKey,
+      hasEnv: !!asaasApiEnv,
+      hasWebhookToken: !!asaasWebhookToken,
+    })
+  }
+
   const allHealthy =
-    dbStatus === 'connected' && redisStatus === 'connected' && pluggyStatus === 'configured'
+    dbStatus === 'connected' &&
+    redisStatus === 'connected' &&
+    pluggyStatus === 'configured' &&
+    asaasStatus === 'connected'
 
   return {
     status: allHealthy ? 'ok' : 'degraded',
     db: dbStatus,
     redis: redisStatus,
     pluggy: { status: pluggyStatus, env: pluggyEnv },
+    asaas: { status: asaasStatus, env: asaasEnv },
     timestamp: new Date().toISOString(),
   }
 })
