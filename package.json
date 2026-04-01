@@ -9,6 +9,7 @@
     "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
+    "check:deps": "node scripts/check-deps.js",
     "db:migrate": "pnpm --filter @tenora/db db:migrate",
     "db:generate": "pnpm --filter @tenora/db db:generate",
     "db:studio": "pnpm --filter @tenora/db db:studio",
@@ -23,7 +24,8 @@
     "prettier": "^3.7.4",
     "turbo": "^2.8.20",
     "typescript": "5.9.2",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "yaml": "^2.8.3"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

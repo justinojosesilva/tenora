@@ -162,11 +162,15 @@ jobs:
       - name: Type-check
         run: pnpm type-check
 
-      # 9. Testes (db é testado no job dedicado com Postgres)
+      # 9. Validar lockfile
+      - name: Validar pnpm-lock.yaml
+        run: pnpm check:deps
+
+      # 10. Testes (db é testado no job dedicado com Postgres)
       - name: Testes
         run: pnpm turbo test --filter=!@tenora/db
 
-      # 10. Build
+      # 11. Build
       - name: Build
         run: pnpm build
         env:
