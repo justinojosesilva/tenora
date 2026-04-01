@@ -24,6 +24,8 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/rate-limit": "^10.3.0",
     "@prisma/client": "^5.22.0",
+    "@react-email/components": "^0.0.15",
+    "@react-email/render": "^0.0.15",
     "@sentry/node": "^10.46.0",
     "@tenora/db": "workspace:*",
     "@tenora/queues": "workspace:*",
@@ -35,12 +37,15 @@
     "fastify-plugin": "^5.1.0",
     "ioredis": "^5.10.1",
     "pluggy-sdk": "^0.83.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "resend": "^6.9.4",
     "stripe": "^21.0.1",
     "svix": "^1.89.0",
     "zod": "^3.0.0"
   },
   "devDependencies": {
+    "@types/react": "^18.3.1",
     "@tenora/eslint-config": "workspace:*",
     "@tenora/typescript-config": "workspace:*",
     "tsup": "^8.5.1"
