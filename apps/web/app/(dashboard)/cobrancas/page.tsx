@@ -66,6 +66,9 @@ async function ChargesSection({
           status: true,
           reference: true,
           type: true,
+          pixCode: true,
+          qrCodeImage: true,
+          asaasChargeId: true,
           lease: {
             select: {
               tenantName: true,
@@ -118,6 +121,9 @@ async function ChargesSection({
     status: c.status as ChargeRow['status'],
     reference: c.reference,
     type: c.type,
+    pixCode: c.pixCode ?? null,
+    qrCodeImage: c.qrCodeImage ?? null,
+    asaasChargeId: c.asaasChargeId ?? null,
     lease: {
       tenantName: c.lease.tenantName,
       property: {

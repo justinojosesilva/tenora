@@ -6,6 +6,7 @@ import { prismaWithTenant } from '@tenora/db'
 
 const MARK_PAID_ROLES = new Set(['admin', 'financeiro'])
 const CANCEL_ROLES = new Set(['admin', 'operacional'])
+const GENERATE_PIX_ROLES = new Set(['admin', 'financeiro'])
 
 async function resolveRole(): Promise<{ orgId: string; role: string } | { error: string }> {
   const { orgId, sessionClaims, orgRole } = await auth()
@@ -102,4 +103,39 @@ export async function cancelChargeAction(
 
   revalidatePath('/cobrancas')
   return { success: true }
+}
+
+export async function generatePixAction(
+  id: string,
+): Promise<{ error?: string; pixCode?: string; qrCodeImage?: string }> {
+  const resolved = await resolveRole()
+  if ('error' in resolved) return { error: resolved.error }
+  const { role } = resolved
+
+  if (!GENERATE_PIX_ROLES.has(role)) return { error: 'Sem permissão para gerar PIX' }
+
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    const response = await fetch(`${apiUrl}/trpc/charges.generatePix`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      return { error: error?.message || 'Erro ao gerar PIX' }
+    }
+
+    const result = await response.json()
+    revalidatePath('/cobrancas')
+    return {
+      pixCode: result?.result?.data?.pixCode ?? undefined,
+      qrCodeImage: result?.result?.data?.qrCodeImage ?? undefined,
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Erro ao gerar PIX' }
+  }
 }

@@ -3,11 +3,15 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Receipt } from 'lucide-react'
+import { Receipt, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChargesStatusBadge, type ChargeStatus } from './charges-status-badge'
-import { markAsPaidAction, cancelChargeAction } from '@/app/(dashboard)/cobrancas/actions'
+import {
+  markAsPaidAction,
+  cancelChargeAction,
+  generatePixAction,
+} from '@/app/(dashboard)/cobrancas/actions'
 import { trackPaymentReceived } from '@/lib/analytics'
 
 export type ChargeRow = {
@@ -20,6 +24,9 @@ export type ChargeRow = {
   status: ChargeStatus
   reference: string | null
   type: 'pix' | 'boleto' | 'transfer'
+  pixCode: string | null
+  qrCodeImage: string | null
+  asaasChargeId: string | null
   lease: {
     tenantName: string
     property: { address: string; city: string | null; owner: { name: string } | null }
@@ -73,6 +80,114 @@ function formatCurrency(value: number | string) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+type PIXModalProps = {
+  chargeId: string
+  initialPixCode?: string | null
+  initialQrCode?: string | null
+  onClose: () => void
+  onPixGenerated?: (pixCode: string, qrCodeImage: string) => void
+}
+
+function PIXModal({
+  chargeId,
+  initialPixCode,
+  initialQrCode,
+  onClose,
+  onPixGenerated,
+}: PIXModalProps) {
+  const [pixCode, setPixCode] = useState<string | null>(initialPixCode ?? null)
+  const [qrCodeImage, setQrCodeImage] = useState<string | null>(initialQrCode ?? null)
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const generatePIX = () => {
+    setError(null)
+    startTransition(async () => {
+      const result = await generatePixAction(chargeId)
+      if (result?.error) {
+        setError(result.error)
+      } else if (result?.pixCode && result?.qrCodeImage) {
+        setPixCode(result.pixCode)
+        setQrCodeImage(result.qrCodeImage)
+        onPixGenerated?.(result.pixCode, result.qrCodeImage)
+      }
+    })
+  }
+
+  const copyToClipboard = () => {
+    if (pixCode) {
+      navigator.clipboard.writeText(pixCode).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+    }
+  }
+
+  if (!pixCode || !qrCodeImage) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="w-full max-w-sm rounded-xl border bg-background p-6 shadow-xl">
+          <h2 className="mb-4 text-base font-semibold">Gerar PIX</h2>
+          {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+          <p className="mb-4 text-sm text-muted-foreground">
+            Clique em &quot;Gerar PIX&quot; para criar um novo código PIX para esta cobrança.
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="button" onClick={generatePIX} disabled={isPending} className="flex-1">
+              {isPending ? 'Gerando…' : 'Gerar PIX'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-sm rounded-xl border bg-background p-6 shadow-xl">
+        <h2 className="mb-4 text-base font-semibold">Código PIX Gerado</h2>
+
+        {/* QR Code */}
+        {qrCodeImage && (
+          <div className="mb-4 flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrCodeImage} alt="QR Code PIX" className="h-48 w-48 rounded-lg border" />
+          </div>
+        )}
+
+        {/* Copy-paste code */}
+        {pixCode && (
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium">Código copia e cola:</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={pixCode}
+                className="flex-1 rounded-lg border bg-muted px-3 py-2 text-xs font-mono"
+              />
+              <Button size="sm" variant="outline" onClick={copyToClipboard}>
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            {copied && <p className="mt-1 text-xs text-green-600">Copiado!</p>}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Fechar
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 type MarkPaidModalProps = {
@@ -168,6 +283,7 @@ export function ChargesPageClient({
   const [markPaidAmount, setMarkPaidAmount] = useState<string>('0')
   const [markPaidType, setMarkPaidType] = useState<'pix' | 'boleto' | 'transfer'>('pix')
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [pixModalId, setPixModalId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   function buildTabUrl(tabKey: string) {
@@ -210,6 +326,19 @@ export function ChargesPageClient({
           onClose={() => setMarkPaidId(null)}
         />
       )}
+
+      {pixModalId &&
+        (() => {
+          const charge = charges.find((c) => c.id === pixModalId)
+          return (
+            <PIXModal
+              chargeId={pixModalId}
+              initialPixCode={charge?.pixCode ?? null}
+              initialQrCode={charge?.qrCodeImage ?? null}
+              onClose={() => setPixModalId(null)}
+            />
+          )
+        })()}
 
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -322,6 +451,15 @@ export function ChargesPageClient({
                         <div className="flex items-center justify-end gap-2">
                           {(c.status === 'pending' || c.status === 'overdue') && (
                             <>
+                              {c.type === 'pix' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setPixModalId(c.id)}
+                                >
+                                  {c.pixCode ? 'Ver PIX' : 'Gerar PIX'}
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" onClick={() => openMarkPaid(c)}>
                                 Marcar pago
                               </Button>
@@ -364,27 +502,39 @@ export function ChargesPageClient({
                   <span>Vence {formatDate(c.dueDate)}</span>
                 </div>
                 {canWrite && (c.status === 'pending' || c.status === 'overdue') && (
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => openMarkPaid(c)}
-                    >
-                      Marcar pago
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      disabled={isPending && cancellingId === c.id}
-                      onClick={() => {
-                        setCancellingId(c.id)
-                        handleCancel(c.id)
-                      }}
-                    >
-                      Cancelar
-                    </Button>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {c.type === 'pix' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setPixModalId(c.id)}
+                      >
+                        {c.pixCode ? 'Ver PIX' : 'Gerar PIX'}
+                      </Button>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => openMarkPaid(c)}
+                      >
+                        Marcar pago
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        disabled={isPending && cancellingId === c.id}
+                        onClick={() => {
+                          setCancellingId(c.id)
+                          handleCancel(c.id)
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
