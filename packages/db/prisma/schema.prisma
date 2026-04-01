@@ -71,6 +71,7 @@ enum BillingStatus {
   paid
   overdue
   cancelled
+  refunded
 }
 
 enum BillingType {

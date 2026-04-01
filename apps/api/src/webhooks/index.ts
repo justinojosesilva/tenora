@@ -597,9 +597,104 @@ export async function registerWebhooks(server: FastifyInstance) {
         break
       }
 
-      case 'PAYMENT_OVERDUE':
-      case 'PAYMENT_EXPIRED':
       case 'PAYMENT_REFUNDED': {
+        const payment = body.payment
+        if (!payment || !payment.id) {
+          server.log.warn({
+            msg: 'Asaas PAYMENT_REFUNDED sem dados de pagamento',
+            body,
+          })
+          return reply.status(200).send({ received: true })
+        }
+
+        // Buscar BillingCharge com dados do contrato e imóvel
+        const charge = await rootDb.billingCharge.findFirst({
+          where: { asaasChargeId: payment.id },
+          include: {
+            lease: {
+              include: {
+                tenant: { select: { id: true } },
+                property: { select: { ownerId: true } },
+              },
+            },
+          },
+        })
+
+        if (!charge) {
+          server.log.warn({
+            msg: 'BillingCharge não encontrada para asaasChargeId (PAYMENT_REFUNDED)',
+            asaasChargeId: payment.id,
+          })
+          return reply.status(200).send({ received: true })
+        }
+
+        // Idempotência: ignorar se a cobrança já foi reembolsada
+        if (charge.status === 'refunded') {
+          server.log.info({
+            msg: 'PAYMENT_REFUNDED ignorado — cobrança já foi reembolsada',
+            chargeId: charge.id,
+            asaasChargeId: payment.id,
+          })
+          return reply.status(200).send({ received: true })
+        }
+
+        const tenantId = charge.lease.tenant.id
+        const ownerId = charge.lease.property.ownerId
+        const paidAmount = charge.paidAmount ? Number(charge.paidAmount) : payment.value
+
+        // Reverter cobrança e reembolsar saldo do proprietário em uma transação atômica
+        const { prismaWithTenant } = await import('@tenora/db')
+        const tenantDb = prismaWithTenant(tenantId)
+
+        await tenantDb.$transaction(async (tx) => {
+          // Atualizar status da cobrança para reembolsada
+          await tx.billingCharge.update({
+            where: { id: charge.id },
+            data: {
+              status: 'refunded',
+              paidAmount: 0,
+              paidAt: null,
+            },
+          })
+
+          // Reverter saldo do proprietário se existir
+          if (ownerId) {
+            await tx.ownerAccount.upsert({
+              where: { ownerId },
+              update: { balance: { decrement: paidAmount } },
+              create: { tenantId, ownerId, balance: -paidAmount },
+            })
+          }
+        })
+
+        server.log.info({
+          msg: 'Cobrança reembolsada via webhook',
+          tenantId,
+          chargeId: charge.id,
+          asaasChargeId: payment.id,
+          refundedAmount: paidAmount,
+          ownerId,
+        })
+
+        // Enfileirar notificação de reembolso
+        await notificationSendQueue.add('notification-send', {
+          tenantId,
+          to: 'notification@tenora.app',
+          subject: 'Reembolso Processado',
+          body: `Reembolso da cobrança ${charge.reference || charge.id} foi processado. Valor: R$ ${paidAmount.toFixed(2)}`,
+          leaseId: charge.leaseId,
+        })
+
+        server.log.info({
+          msg: 'Notificação de reembolso enfileirada',
+          tenantId,
+          chargeId: charge.id,
+        })
+        break
+      }
+
+      case 'PAYMENT_OVERDUE':
+      case 'PAYMENT_EXPIRED': {
         // Futuros eventos (out of scope)
         server.log.info({
           msg: 'Asaas event não tratado',
