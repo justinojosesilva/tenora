@@ -2,10 +2,16 @@
 
 import { useCallback } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { Search, Bell, CalendarDays } from 'lucide-react'
+import { Search, Bell, CalendarDays, Menu } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+
+interface AppTopbarProps {
+  mobileMenuOpen?: boolean
+  onMobileMenuToggle?: (open: boolean) => void
+  isMobile?: boolean
+}
 
 const PERIODS = [
   { label: 'Últimos 30 dias', value: '30d' },
@@ -15,7 +21,11 @@ const PERIODS = [
 
 export type Period = (typeof PERIODS)[number]['value']
 
-export function AppTopbar() {
+export function AppTopbar({
+  mobileMenuOpen = false,
+  onMobileMenuToggle,
+  isMobile = false,
+}: AppTopbarProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -31,9 +41,22 @@ export function AppTopbar() {
   )
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background px-6">
-      {/* Search */}
-      <div className="relative w-full max-w-sm">
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-background px-4 md:px-6">
+      {/* Mobile menu button */}
+      {isMobile && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 md:hidden"
+          onClick={() => onMobileMenuToggle?.(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
+      )}
+
+      {/* Search - hidden on small mobile, visible from sm up */}
+      <div className="relative w-full max-w-sm hidden sm:block">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Buscar por imóvel, proprietário ou transações..."
@@ -43,8 +66,8 @@ export function AppTopbar() {
 
       <div className="flex-1" />
 
-      {/* Period selector */}
-      <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+      {/* Period selector - hidden on small mobile */}
+      <div className="hidden sm:flex items-center gap-1 rounded-lg bg-muted p-1">
         {PERIODS.map((p) => (
           <button
             key={p.value}
