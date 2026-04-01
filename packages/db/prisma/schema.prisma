@@ -318,6 +318,7 @@ model Category {
   tenantId  String   @map("tenant_id")
   name      String
   type      String   // income | expense
+  color     String   @default("blue") // hex color or named color
   group     String?
   isSystem  Boolean  @default(false) @map("is_system")
   createdAt DateTime @default(now()) @map("created_at")

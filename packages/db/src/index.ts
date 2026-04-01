@@ -1,5 +1,6 @@
 export { prismaWithTenant, withTenantRLS, db } from './rls'
 export { safeDb } from './guards'
+export { autoCategorizeBankTransaction, DEFAULT_SYSTEM_CATEGORIES } from './categorizer'
 export type { TenantDB } from './rls'
 export type {
   PropertyStatus,
