@@ -30,6 +30,16 @@ pnpm --filter @tenora/db test    # Vitest (RLS integration — requires Postgres
 docker compose up -d
 ```
 
+## Before Creating a PR
+
+**Always validate `pnpm-lock.yaml` before pushing:**
+
+```bash
+pnpm check:deps
+```
+
+This runs `scripts/check-deps.js`, which verifies that the lockfile is in sync with all `package.json` declarations. If the lockfile is stale (e.g., after modifying dependencies), the CI pipeline will fail at the validation step. Running this locally first prevents failed builds.
+
 ## Architecture
 
 ### Monorepo Structure
@@ -43,11 +53,17 @@ docker compose up -d
 
 ### TypeScript Import Rules (Critical)
 
-All packages use `"module": "ESNext"` and `"moduleResolution": "Bundler"` — **never use `NodeNext`**. This is required because Next.js/Turbopack reads TypeScript source directly and cannot resolve `.js → .ts` mappings.
+All packages use `"module": "ESNext"` and `"moduleResolution": "Bundler"` — **never use `NodeNext`**. This is required because Next.js 16/Turbopack reads TypeScript source directly and cannot resolve `.js → .ts` mappings.
 
-- **Never add `.js` extensions** to relative imports in TypeScript source files.
-- **Never use `export * from '@prisma/client'`** (CJS barrel re-export) — Turbopack cannot statically analyze it. Use explicit named `export type { ... }` instead.
-- This applies to all packages: `db`, `trpc`, `validators`, `queues`, and `apps/api`.
+**Golden Rule:** Turbopack bundles both client and server code — it requires full static analyzability.
+
+Import Rules:
+
+- **Never add `.js` extensions** to relative imports in TypeScript source files (e.g., `import { foo } from './file'` not `'./file.js'`)
+- **Never use `export * from '@prisma/client'`** (CJS barrel re-export) — Turbopack cannot statically analyze it. Use explicit named exports instead: `export type { User }` or `export { PrismaClient }`
+- **Never re-export types from external packages** without explicit `export type` syntax
+- This applies to all packages: `db`, `trpc`, `validators`, `queues`, and `apps/api`
+- Note: `apps/web` uses Next.js App Router (no middleware.ts); request routing is handled by `proxy.ts` at the edge via Vercel
 
 ### Multi-Tenancy (Critical)
 
