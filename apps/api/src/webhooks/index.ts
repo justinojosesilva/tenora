@@ -4,7 +4,7 @@ import { Webhook } from 'svix'
 import Stripe from 'stripe'
 import { db as rootDb } from '@tenora/db'
 import { UserRole } from '@prisma/client'
-import { bankSyncQueue } from '@tenora/queues'
+import { bankSyncQueue, notificationSendQueue } from '@tenora/queues'
 
 // ── Pluggy Webhook Types ──────────────────────────────────────────────────────
 
@@ -76,6 +76,31 @@ type ClerkWebhookEvent =
   | OrganizationMembershipCreatedPayload
   | OrganizationCreatedPayload
   | UserUpdatedPayload
+
+// ── Asaas Webhook Types ────────────────────────────────────────────────────────
+
+interface AsaasPaymentPayload {
+  id: string
+  customer?: string
+  description?: string
+  value: number
+  status: string
+  billingType: string
+  pixQrCode?: string
+  pixCopyPaste?: string
+  bankSlipUrl?: string
+  bankSlipCode?: string
+  reference?: string
+  dueDate?: string
+  confirmedDate?: string
+  [key: string]: unknown
+}
+
+interface AsaasWebhookEvent {
+  event: string
+  payment?: AsaasPaymentPayload
+  [key: string]: unknown
+}
 
 export async function registerWebhooks(server: FastifyInstance) {
   server.post('/webhooks/clerk', async (request, reply) => {
@@ -432,6 +457,111 @@ export async function registerWebhooks(server: FastifyInstance) {
     }
 
     // 5. Retornar 200 imediatamente (processamento é assíncrono)
+    return reply.status(200).send({ received: true })
+  })
+
+  // ── Asaas Webhook ─────────────────────────────────────────────────────────
+  server.post('/webhooks/asaas', async (request, reply) => {
+    const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN
+
+    if (!webhookToken) {
+      server.log.error('ASAAS_WEBHOOK_TOKEN não configurada')
+      return reply.status(500).send({ error: 'Webhook token not configured' })
+    }
+
+    // 1. Validar token via query param ou header
+    const tokenFromHeader = (request.headers['authorization'] as string)?.replace('Bearer ', '')
+    const tokenFromQuery = (request.query as Record<string, string>)?.token
+    const incomingToken = tokenFromHeader || tokenFromQuery
+
+    if (!incomingToken || incomingToken !== webhookToken) {
+      server.log.warn({ msg: 'Asaas webhook token inválido' })
+      return reply.status(401).send({ error: 'Invalid token' })
+    }
+
+    // 2. Parsear evento
+    const body = request.body as AsaasWebhookEvent
+
+    server.log.info({
+      msg: 'Webhook Asaas recebido',
+      event: body.event,
+      paymentId: body.payment?.id,
+    })
+
+    // 3. Processar evento
+    switch (body.event) {
+      case 'PAYMENT_RECEIVED': {
+        const payment = body.payment
+        if (!payment || !payment.id) {
+          server.log.warn({
+            msg: 'Asaas PAYMENT_RECEIVED sem dados de pagamento',
+            body,
+          })
+          return reply.status(200).send({ received: true })
+        }
+
+        // Buscar BillingCharge pela asaasChargeId
+        const charge = await rootDb.billingCharge.findFirst({
+          where: { asaasChargeId: payment.id },
+          include: {
+            lease: {
+              include: {
+                tenant: { select: { id: true } },
+              },
+            },
+          },
+        })
+
+        if (!charge) {
+          server.log.warn({
+            msg: 'BillingCharge não encontrada para asaasChargeId',
+            asaasChargeId: payment.id,
+          })
+          return reply.status(200).send({ received: true })
+        }
+
+        const tenantId = charge.lease.tenant.id
+
+        // Enfileirar job de notificação de pagamento confirmado
+        // Nota: O worker de notificação construirá o email com os dados da cobrança
+        await notificationSendQueue.add('notification-send', {
+          tenantId,
+          to: 'notification@tenora.app', // será substituído pelo worker com email real do tenant
+          subject: 'Pagamento Confirmado',
+          body: `Pagamento da cobrança ${charge.reference || charge.id} foi confirmado`,
+          leaseId: charge.leaseId,
+        })
+
+        server.log.info({
+          msg: 'Job notification-send enfileirado para PAYMENT_RECEIVED',
+          tenantId,
+          chargeId: charge.id,
+          asaasChargeId: payment.id,
+        })
+        break
+      }
+
+      case 'PAYMENT_OVERDUE':
+      case 'PAYMENT_EXPIRED':
+      case 'PAYMENT_REFUNDED': {
+        // Futuros eventos (out of scope)
+        server.log.info({
+          msg: 'Asaas event não tratado',
+          event: body.event,
+          paymentId: body.payment?.id,
+        })
+        break
+      }
+
+      default: {
+        server.log.debug({
+          msg: 'Asaas event type desconhecido',
+          event: body.event,
+        })
+      }
+    }
+
+    // 4. Retornar 200 imediatamente (processamento é assíncrono)
     return reply.status(200).send({ received: true })
   })
 }
