@@ -86,6 +86,12 @@ enum MaintenanceStatus {
   done
 }
 
+enum RepaymentStatus {
+  pending
+  paid
+  cancelled
+}
+
 // ── Tenant (imobiliária) ───────────────────────────────────────────────────
 
 model Tenant {
@@ -120,6 +126,7 @@ model Tenant {
   leases           Lease[]
   billingCharges   BillingCharge[]
   maintenanceOrders MaintenanceOrder[]
+  repayments       Repayment[]
 
   @@map("tenants")
 }
@@ -160,6 +167,7 @@ model Owner {
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   properties   Property[]
   ownerAccount OwnerAccount?
+  repayments   Repayment[]
 
   @@index([tenantId])
   @@map("owners")
@@ -421,4 +429,25 @@ model MaintenanceOrder {
   @@index([tenantId])
   @@index([propertyId])
   @@map("maintenance_orders")
+}
+
+// ── Repayment (repasse para proprietário) ──────────────────────────────────
+
+model Repayment {
+  id        String            @id @default(uuid())
+  tenantId  String            @map("tenant_id")
+  ownerId   String            @map("owner_id")
+  amount    Decimal           @db.Decimal(14, 2)
+  period    String            // "2026-04"
+  status    RepaymentStatus   @default(pending)
+  paidAt    DateTime?         @map("paid_at")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  owner  Owner  @relation(fields: [ownerId], references: [id])
+
+  @@index([tenantId])
+  @@index([ownerId])
+  @@map("repayments")
 }
