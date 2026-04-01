@@ -10,6 +10,7 @@ import { chargesRouter } from './charges.router.js'
 import { pluggyRouter } from './pluggy.router.js'
 import { bankAccountRouter } from './bankAccount.router.js'
 import { repaymentRouter } from './repayment.router.js'
+import { reportRouter } from './report.router.js'
 import { splitRouter } from './split.router.js'
 import { settingsRouter } from './settings.router.js'
 
@@ -25,6 +26,7 @@ export const appRouter: TRPCRouter = router({
   pluggy: pluggyRouter,
   bankAccount: bankAccountRouter,
   repayment: repaymentRouter,
+  report: reportRouter,
   split: splitRouter,
   settings: settingsRouter,
 })
