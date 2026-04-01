@@ -709,15 +709,39 @@ function createNotificationSendWorker() {
         `[notification:send] job ${job.id} | tenant=${job.data.tenantId} to=${job.data.to} subject="${job.data.subject}"`,
       )
 
-      const { error } = await resend.emails.send({
-        from: process.env.EMAIL_FROM ?? 'Tenora <noreply@tenora.com.br>',
-        to: job.data.to,
-        subject: job.data.subject,
-        html: job.data.body,
-      })
+      try {
+        const { error } = await resend.emails.send({
+          from: process.env.EMAIL_FROM ?? 'Tenora <noreply@tenora.com.br>',
+          to: job.data.to,
+          subject: job.data.subject,
+          html: job.data.body,
+        })
 
-      if (error) {
-        throw new Error(`Resend error: ${error.message}`)
+        if (error) {
+          throw new Error(`Resend API error: ${error.message}`)
+        }
+
+        console.log(
+          `[notification:send] job ${job.id} | email enviado com sucesso para ${job.data.to}`,
+        )
+      } catch (resendErr) {
+        const errorMsg = resendErr instanceof Error ? resendErr.message : String(resendErr)
+        console.error(
+          `[notification:send] job ${job.id} | Resend falhou, registrando fallback: ${errorMsg}`,
+        )
+
+        // Fallback: log the email instead of sending via Resend
+        console.log('[notification:send] FALLBACK EMAIL:', {
+          timestamp: new Date().toISOString(),
+          to: job.data.to,
+          subject: job.data.subject,
+          tenantId: job.data.tenantId,
+          body: job.data.body,
+          reason: errorMsg,
+        })
+
+        // Re-throw to trigger retry (job will be retried with backoff)
+        throw resendErr
       }
     },
     { connection: redisConnection, settings: workerSettings },
