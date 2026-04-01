@@ -3,6 +3,7 @@ import { router, protectedProcedure, requireRole, type TRPCRouter } from '@tenor
 import { BillingCreateSchema, BillingListSchema, BillingMarkAsPaidSchema } from '@tenora/validators'
 import { TRPCError } from '@trpc/server'
 import { UserRole } from '@prisma/client'
+import { getAsaasClient } from '../lib/asaas-client'
 
 export const chargesRouter: TRPCRouter = router({
   list: protectedProcedure.input(BillingListSchema).query(async ({ ctx, input }) => {
@@ -143,5 +144,43 @@ export const chargesRouter: TRPCRouter = router({
         where: { id: input.id },
         data: { status: 'cancelled' },
       })
+    }),
+
+  generateBoleto: protectedProcedure
+    .use(requireRole(UserRole.admin, UserRole.financeiro))
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const charge = await ctx.db.billingCharge.findUnique({
+        where: { id: input.id },
+        include: { lease: { include: { tenant: true } } },
+      })
+      if (!charge) throw new TRPCError({ code: 'NOT_FOUND', message: 'Cobrança não encontrada' })
+
+      // Idempotence: if boleto already generated, return existing
+      if (charge.asaasChargeId) {
+        return charge
+      }
+
+      // Generate boleto via Asaas
+      const asaas = getAsaasClient()
+      const dueDateStr = charge.dueDate.toISOString().split('T')[0]!
+      const boleto = await asaas.createBoleto({
+        description: `Aluguel - ${charge.reference || `Vencimento ${charge.dueDate.toLocaleDateString('pt-BR')}`}`,
+        value: Number(charge.amount),
+        dueDate: dueDateStr, // YYYY-MM-DD format
+      })
+
+      // Save boleto data
+      const updated = await ctx.db.billingCharge.update({
+        where: { id: input.id },
+        data: {
+          asaasChargeId: boleto.id,
+          ...(boleto.bankSlipCode && { boletoCode: boleto.bankSlipCode }),
+          ...(boleto.bankSlipUrl && { boletoUrl: boleto.bankSlipUrl }),
+        },
+        include: { lease: true },
+      })
+
+      return updated
     }),
 })

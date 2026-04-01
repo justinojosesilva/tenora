@@ -383,6 +383,8 @@ model BillingCharge {
   type        BillingType   @default(pix)
   pixCode     String?       @map("pix_code")
   boletoCode  String?       @map("boleto_code")
+  boletoUrl   String?       @map("boleto_url")
+  asaasChargeId String?     @map("asaas_charge_id") @unique
   reference   String?       // "Outubro 2025"
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
