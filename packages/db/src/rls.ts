@@ -28,20 +28,53 @@ export async function withTenantRLS<T>(
   )
 }
 
+type AnyRecord = Record<string, unknown>
+
 export function prismaWithTenant(tenantId: string): PrismaClient {
   return new Proxy(db, {
     get(target, modelName: string) {
-      if (modelName.startsWith('$') || typeof (target as any)[modelName] !== 'object') {
-        const value = (target as any)[modelName]
-        return typeof value === 'function' ? value.bind(target) : value
+      if (modelName === '$transaction') {
+        return (
+          fnOrQueries:
+            | ((tx: Prisma.TransactionClient) => Promise<unknown>)
+            | readonly Prisma.PrismaPromise<unknown>[],
+          options?: Parameters<PrismaClient['$transaction']>[1],
+        ) => {
+          if (typeof fnOrQueries === 'function') {
+            return db.$transaction(
+              async (tx) => {
+                await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, TRUE)`
+                return fnOrQueries(tx)
+              },
+              options as Parameters<typeof db.$transaction>[1],
+            )
+          }
+          return withTenantRLS(tenantId, () =>
+            db.$transaction(
+              fnOrQueries as Parameters<typeof db.$transaction>[0],
+              options as Parameters<typeof db.$transaction>[1],
+            ),
+          )
+        }
       }
 
-      return new Proxy((target as any)[modelName], {
+      if (modelName.startsWith('$') || typeof (target as AnyRecord)[modelName] !== 'object') {
+        const value = (target as AnyRecord)[modelName]
+        return typeof value === 'function'
+          ? (value as (...a: unknown[]) => unknown).bind(target)
+          : value
+      }
+
+      return new Proxy((target as AnyRecord)[modelName] as AnyRecord, {
         get(model, method: string) {
-          const fn = (model as any)[method]
+          const fn = (model as AnyRecord)[method]
           if (typeof fn !== 'function') return fn
-          return (...args: any[]) =>
-            withTenantRLS(tenantId, (tx) => (tx as any)[modelName][method](...args))
+          return (...args: unknown[]) =>
+            withTenantRLS(
+              tenantId,
+              (tx) =>
+                ((tx as AnyRecord)[modelName] as AnyRecord)[method](...args) as Promise<unknown>,
+            )
         },
       })
     },

@@ -215,8 +215,8 @@ describe('S5-11 — E2E PIX Payment Flow', () => {
     const loadedProperty = await db.property.findUnique({ where: { id: property.id } })
     expect(loadedProperty).not.toBeNull()
     expect(loadedProperty?.ownerId).toBe(owner.id)
-    expect(loadedProperty?.rentAmount).toBe(2000)
-    expect(loadedProperty?.adminFeePct).toBe(10)
+    expect(Number(loadedProperty?.rentAmount)).toBe(2000)
+    expect(Number(loadedProperty?.adminFeePct)).toBe(10)
 
     const loadedLease = await db.lease.findUnique({ where: { id: lease.id } })
     expect(loadedLease).not.toBeNull()
@@ -226,6 +226,6 @@ describe('S5-11 — E2E PIX Payment Flow', () => {
     const loadedCharge = await db.billingCharge.findUnique({ where: { id: charge.id } })
     expect(loadedCharge).not.toBeNull()
     expect(loadedCharge?.leaseId).toBe(lease.id)
-    expect(loadedCharge?.amount).toBe(2000)
+    expect(Number(loadedCharge?.amount)).toBe(2000)
   })
 })
