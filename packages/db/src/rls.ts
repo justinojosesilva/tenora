@@ -29,6 +29,7 @@ export async function withTenantRLS<T>(
 }
 
 type AnyRecord = Record<string, unknown>
+type AnyFn = (...args: unknown[]) => Promise<unknown>
 
 export function prismaWithTenant(tenantId: string): PrismaClient {
   return new Proxy(db, {
@@ -51,30 +52,28 @@ export function prismaWithTenant(tenantId: string): PrismaClient {
           }
           return withTenantRLS(tenantId, () =>
             db.$transaction(
-              fnOrQueries as Parameters<typeof db.$transaction>[0],
+              fnOrQueries as unknown as (tx: Prisma.TransactionClient) => Promise<unknown>,
               options as Parameters<typeof db.$transaction>[1],
             ),
           )
         }
       }
 
-      if (modelName.startsWith('$') || typeof (target as AnyRecord)[modelName] !== 'object') {
-        const value = (target as AnyRecord)[modelName]
-        return typeof value === 'function'
-          ? (value as (...a: unknown[]) => unknown).bind(target)
-          : value
+      const targetRecord = target as unknown as AnyRecord
+      if (modelName.startsWith('$') || typeof targetRecord[modelName] !== 'object') {
+        const value = targetRecord[modelName]
+        return typeof value === 'function' ? (value as AnyFn).bind(target) : value
       }
 
-      return new Proxy((target as AnyRecord)[modelName] as AnyRecord, {
+      return new Proxy(targetRecord[modelName] as AnyRecord, {
         get(model, method: string) {
           const fn = (model as AnyRecord)[method]
           if (typeof fn !== 'function') return fn
           return (...args: unknown[]) =>
-            withTenantRLS(
-              tenantId,
-              (tx) =>
-                ((tx as AnyRecord)[modelName] as AnyRecord)[method](...args) as Promise<unknown>,
-            )
+            withTenantRLS(tenantId, (tx) => {
+              const txRecord = tx as unknown as AnyRecord
+              return ((txRecord[modelName] as AnyRecord)[method] as AnyFn)(...args)
+            })
         },
       })
     },
